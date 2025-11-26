@@ -52,11 +52,17 @@ This is essential because hardcoding URLs or credentials is bad practice.
 
 3️⃣ Run the backend
 
+npm install
+
 npm run dev starts the server with hot reload, so they can see changes instantly.
+
 
 4️⃣ Run the frontend
 
+npm install
+
 npm run dev starts Vite dev server so they can view the app in the browser.
+
 
 5️⃣ API Testing
 
