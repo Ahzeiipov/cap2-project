@@ -88,4 +88,30 @@ Clarifies which stack is used for frontend and backend.
 
 
 
+Cd frontend ( Line )
 
+npm install react-router-dom
+npm install jsqr qr-scanner html5-qrcode
+npm install --save-dev @types/jsqr
+npm install qrcode
+npm install react-qr-reader@3.0.0-beta-1 --legacy-peer-deps
+cd "C:\Year 4\cap2-project\backend"
+npm install mongoose dotenv
+npm install -D @types/mongoose
+
+
+# open backend folder
+Set-Location "C:\Year 4\cap2-project\backend"
+
+# install deps
+npm install
+npm install mongoose dotenv
+npm install -D ts-node typescript ts-node-dev @types/node
+
+# run seeder (uses src/seed-runner.ts)
+npm run seed
+# or (if you don't have the script)
+npx ts-node src/seed-runner.ts
+
+# start dev server
+npm run dev
