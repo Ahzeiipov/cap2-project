@@ -1,19 +1,39 @@
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
-import dotenv from "dotenv";
+import dotenv from 'dotenv'
+import express from 'express'
+import cors from 'cors'
+import attendanceRouter from './routes/attendance'
+import organizationsRouter from './routes/organizations'
+import networksRouter from './routes/networks'
+import { connectDb } from './db'
+import { seedDatabase } from './seed' // <-- new
 
-dotenv.config();
+dotenv.config()
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const app = express()
+const PORT = Number(process.env.PORT || 3000)
 
-app.get("/", (req, res) => {
-  res.send("Hello, MERN world!");
-});
+app.use(cors())
+app.use(express.json())
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+app.use('/api/attendance', attendanceRouter)
+app.use('/api/organizations', organizationsRouter)
+app.use('/api/networks', networksRouter)
+
+app.get('/health', (_req, res) => res.json({ ok: true }))
+
+async function start() {
+  try {
+    await connectDb()
+    // run seed only once if collections empty
+    await seedDatabase()
+
+    app.listen(PORT, () => {
+      console.log(`Backend listening on http://localhost:${PORT}`)
+    })
+  } catch (err) {
+    console.error('Startup error', err)
+    process.exit(1)
+  }
+}
+
+start()
