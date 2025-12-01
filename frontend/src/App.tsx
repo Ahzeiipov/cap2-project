@@ -1,35 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState, useRef } from 'react';
+import MedicalRecord from './pages/medical/page';
+import CompleteMedicalRecord from './pages/medical/completeMedicalRecord';
+import type { MedicalRecordData } from './pages/medical/page';
+
+type Page = 'medical' | 'complete-medical-record';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState<Page>('medical');
+  const [editingRecord, setEditingRecord] = useState<MedicalRecordData | null>(null);
+  const addRecordRef = useRef<((record: MedicalRecordData) => void) | null>(null);
+  const updateRecordRef = useRef<((record: MedicalRecordData) => void) | null>(null);
+
+  const handleNavigateToForm = () => {
+    setEditingRecord(null);
+    setCurrentPage('complete-medical-record');
+  };
+
+  const handleEditRecord = (record: MedicalRecordData) => {
+    setEditingRecord(record);
+    setCurrentPage('complete-medical-record');
+  };
+
+  const handleBack = () => {
+    setEditingRecord(null);
+    setCurrentPage('medical');
+  };
+
+  const handleAddRecord = (record: MedicalRecordData) => {
+    if (addRecordRef.current) {
+      addRecordRef.current(record);
+    }
+  };
+
+  const handleUpdateRecord = (record: MedicalRecordData) => {
+    if (updateRecordRef.current) {
+      updateRecordRef.current(record);
+    }
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div style={{ padding: '20px', background: '#fff', minHeight: '100vh' }}>
+      {/* Keep MedicalRecord mounted but hidden when on form page */}
+      <div style={{ display: currentPage === 'medical' ? 'block' : 'none' }}>
+        <MedicalRecord 
+          onNavigateToForm={handleNavigateToForm}
+          onEditRecord={handleEditRecord}
+          onSetAddRecord={(fn) => { addRecordRef.current = fn; }}
+          onSetUpdateRecord={(fn) => { updateRecordRef.current = fn; }}
+        />
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+      
+      {/* Show CompleteMedicalRecord when on form page */}
+      {currentPage === 'complete-medical-record' && (
+        <CompleteMedicalRecord 
+          onBack={handleBack} 
+          editingRecord={editingRecord}
+          onAddRecord={handleAddRecord}
+          onUpdateRecord={handleUpdateRecord}
+        />
+      )}
+    </div>
+  );
 }
 
-export default App
+export default App;
