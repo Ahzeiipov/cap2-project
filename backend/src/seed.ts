@@ -1,3 +1,4 @@
+// backend/src/seed.ts
 import { Attendance } from './models/attendance'
 import { Organization } from './models/organization'
 import { Network } from './models/network'
@@ -49,6 +50,7 @@ export async function seedDatabase() {
           checkInTime: '08:45 AM',
           date: defaultDate,
           status: 'present',
+          approval: 'accepted',
         },
         {
           profile: '👨‍⚕️',
@@ -62,6 +64,7 @@ export async function seedDatabase() {
           checkInTime: '09:15 AM',
           date: defaultDate,
           status: 'late',
+          approval: 'pending',
         },
         {
           profile: '👩‍⚕️',
@@ -76,6 +79,7 @@ export async function seedDatabase() {
           checkOutTime: '05:30 PM',
           date: defaultDate,
           status: 'present',
+          approval: 'accepted',
         },
       ]
       await Attendance.insertMany(attendances)
@@ -84,9 +88,36 @@ export async function seedDatabase() {
 
     if (appCount === 0) {
       await Appointment.insertMany([
-        { patientName: 'Sambo Sopheakline', patientId: 'P001', doctorName: 'Dr. Sarah Johnson', doctorRole: 'General Physician', date: '2025-01-20', time: '09:00 AM', room: 'Room 101', reason: 'Regular checkup' },
-        { patientName: 'Sambo Sopheaklinet', patientId: 'P002', doctorName: 'Dr. Michael Chen', doctorRole: 'Cardiologist', date: '2025-01-21', time: '10:00 AM', room: 'Room 202', reason: 'Follow-up' },
-        { patientName: 'Poch Sreypov', patientId: 'P003', doctorName: 'Dr. Sarah Johnson', doctorRole: 'General Physician', date: '2025-01-22', time: '11:00 AM', room: 'Room 101', reason: 'Consultation' },
+        {
+          patientName: 'Sambo Sopheakline',
+          patientId: 'P001',
+          doctorName: 'Dr. Sarah Johnson',
+          service: 'General Consultation',
+          date: '2025-01-20',
+          time: '09:00 AM',
+          room: 'Room 101',
+          reason: 'Regular checkup',
+        },
+        {
+          patientName: 'Sambo Sopheaklinet',
+          patientId: 'P002',
+          doctorName: 'Dr. Michael Chen',
+          service: 'ECG',
+          date: '2025-01-21',
+          time: '10:00 AM',
+          room: 'Room 202',
+          reason: 'Follow-up',
+        },
+        {
+          patientName: 'Poch Sreypov',
+          patientId: 'P003',
+          doctorName: 'Dr. Sarah Johnson',
+          service: 'Vaccination',
+          date: '2025-01-22',
+          time: '11:00 AM',
+          room: 'Room 101',
+          reason: 'Consultation',
+        },
       ])
       console.log('Seeded appointments')
     }

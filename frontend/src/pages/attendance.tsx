@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Edit, Trash2, QrCode, AlertCircle, CheckCircle, Clock, Download, X, Camera, Upload } from 'lucide-react'
+import { Plus, Edit, Trash2, QrCode, AlertCircle, CheckCircle, Clock, Download, X, Camera, Upload, Send } from 'lucide-react'
 import QRCode from 'qrcode' //ignore that shit cus it work and idk why it still red
 import './attendance.css'
 
@@ -17,6 +17,7 @@ interface Attendance {
   checkOutTime?: string
   date: string
   status: "present" | "absent" | "late"
+  approval?: "pending" | "accepted" | "rejected"
 }
 
 interface Organization {
@@ -149,7 +150,33 @@ export default function AttendancePage() {
     ipAddress: "",
   })
 
+  const determineStatus = (checkInTime: string): "present" | "late" => {
+  // Parse check-in time (format: "HH:MM AM/PM")
+  const timeParts = checkInTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  
+  if (!timeParts) return "present"; // default if parsing fails
+  
+  let hours = parseInt(timeParts[1]);
+  const minutes = parseInt(timeParts[2]);
+  const period = timeParts[3].toUpperCase();
+  
+  // Convert to 24-hour format
+  if (period === "PM" && hours !== 12) {
+    hours += 12;
+  } else if (period === "AM" && hours === 12) {
+    hours = 0;
+  }
+  
+  // Create time in minutes for comparison
+  const checkInMinutes = hours * 60 + minutes;
+  const cutoffMinutes = 8 * 60 + 30; // 8:30 AM = 510 minutes
+  
+  // If check-in is after 8:30 AM, mark as late
+  return checkInMinutes > cutoffMinutes ? "late" : "present";
+};
+
   const [statusFilter, setStatusFilter] = useState<"all" | "present" | "late" | "absent">("all")
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [currentDeviceIP, setCurrentDeviceIP] = useState<string>("")
   const [ipValidationError, setIPValidationError] = useState<string>("")
   const [scannedOrgData, setScannedOrgData] = useState<{
@@ -219,12 +246,11 @@ export default function AttendancePage() {
     }
   }, [searchParams])
 
-  // Update attendance fetch to use today's date
+  // Update attendance filter to use selected date
   useEffect(() => {
-    const todayStr = new Date().toISOString().split('T')[0]
-    const today = attendance.filter((a) => a.date === todayStr)
-    setTodayAttendance(today)
-  }, [attendance])
+    const filtered = attendance.filter((a) => a.date === selectedDate)
+    setTodayAttendance(filtered)
+  }, [attendance, selectedDate])
 
   // API helpers
   const normalizeNetwork = (n: any) => ({ id: n?.id ?? n?._id, name: n?.name, ipAddress: n?.ipAddress })
@@ -520,6 +546,9 @@ export default function AttendancePage() {
     if (!manualData.name || !manualData.staffId) return
 
     try {
+      const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const autoStatus = determineStatus(currentTime);
+      
       if (isEditingAttendance && editingAttendanceId) {
         const updated = await updateAttendanceAPI(editingAttendanceId, {
           ...manualData,
@@ -531,9 +560,11 @@ export default function AttendancePage() {
       } else {
         const newRecordPayload: Partial<Attendance> = {
           ...manualData,
-          checkInTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          checkInTime: currentTime,
           date: new Date().toISOString().split('T')[0],
-          status: 'present',
+          status: autoStatus, // Use automatic status detection
+
+          approval: "pending",
         }
         const created = await createAttendanceAPI(newRecordPayload)
         setAttendance((prev) => [created, ...prev])
@@ -543,9 +574,12 @@ export default function AttendancePage() {
       setIsManualDialogOpen(false)
     } catch (err) {
       console.error(err)
-      // keep UX: show error to user if desired
     }
   }
+
+  const updateStatusBasedOnTime = (checkInTime: string): "present" | "late" => {
+    return determineStatus(checkInTime);
+  };
 
   // replace delete handler to call backend
   const handleDeleteAttendance = async (id: string) => {
@@ -570,6 +604,43 @@ export default function AttendancePage() {
       alert('Failed to check out')
     }
   }
+
+  const handleUpdateApproval = async (id: string, newStatus: "pending" | "accepted" | "rejected") => {
+  try {
+    // SAVE TO BACKEND
+    await updateAttendanceAPI(id, { approval: newStatus })
+
+    // UPDATE UI STATE
+    setAttendance((prev) =>
+      prev.map((a) =>
+        a.id === id ? { ...a, approval: newStatus } : a
+      )
+    )
+  } catch (err) {
+    console.error("Approval update failed", err)
+    alert("Failed to update approval status")
+  }
+}
+
+const handleAskPermission = async (id: string) => {
+  try {
+    // Set approval to pending (requesting permission)
+    await updateAttendanceAPI(id, { approval: "pending" })
+    
+    // UPDATE UI STATE
+    setAttendance((prev) =>
+      prev.map((a) =>
+        a.id === id ? { ...a, approval: "pending" } : a
+      )
+    )
+    
+    alert("Permission request sent successfully!")
+  } catch (err) {
+    console.error("Ask permission failed", err)
+    alert("Failed to send permission request")
+  }
+}
+
 
   const handleEditAttendance = (record: Attendance) => {
     setManualData({
@@ -743,7 +814,11 @@ export default function AttendancePage() {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-white p-6 rounded-lg shadow">
-                <p className="text-gray-600 text-sm mb-2">Today's Check-ins</p>
+                <p className="text-gray-600 text-sm mb-2">
+                  {selectedDate === new Date().toISOString().split('T')[0] 
+                    ? "Today's Check-ins" 
+                    : `Check-ins on ${new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`}
+                </p>
                 <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow">
@@ -779,119 +854,260 @@ export default function AttendancePage() {
                     <Plus className="h-4 w-4" />
                     Add Record
                   </button>
+                  <button
+                    onClick={() => {
+                      const pendingRecords = todayAttendance.filter(a => !a.approval || a.approval === 'pending')
+                      if (pendingRecords.length === 0) {
+                        alert('No pending attendance records to request permission for.')
+                        return
+                      }
+                      pendingRecords.forEach(record => handleAskPermission(record.id))
+                    }}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                  >
+                    <Send className="h-4 w-4" />
+                    Ask Permission
+                  </button>
                 </div>
               </div>
 
-              {/* Filter */}
-              <div className="mb-4">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700"
-                >
-                  <option value="all">All Status</option>
-                  <option value="present">Present</option>
-                  <option value="late">Late</option>
-                  <option value="absent">Absent</option>
-                </select>
+              {/* Filters */}
+              <div className="mb-4 flex gap-3 items-center flex-wrap">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Date:</label>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700"
+                  />
+                  <button
+                    onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                    className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                  >
+                    Today
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Status:</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="present">Present</option>
+                    <option value="late">Late</option>
+                    <option value="absent">Absent</option>
+                  </select>
+                </div>
               </div>
 
               {/* Records List */}
-              <div className="space-y-3">
+              <div className="overflow-x-auto">
                 {filteredAttendance.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
                     <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No attendance records found</p>
                   </div>
                 ) : (
-                  filteredAttendance.map((record) => (
-                    <div key={record.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                      <div className="grid grid-cols-8 gap-4 mb-3">
-                        <div>
-                          <p className="text-xs text-gray-500">Profile</p>
-                          <p className="text-lg">{record.profile}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Name</p>
-                          <p className="font-semibold text-sm">{record.name}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Role</p>
-                          <p className="text-sm">{record.role}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Organization</p>
-                          <p className="text-sm">{record.organization}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Room</p>
-                          <p className="text-sm">{record.room}</p>
-                        </div>
+                  <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PROFILE</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>NAME</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>STAFF ID</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ROLE</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ORGANIZATION</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ROOM</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>STATUS</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SHIFT</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CHECK IN/OUT</th>
+                        <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>APPROVAL</th>
+                        <th style={{ textAlign: 'right', padding: '12px 16px', fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ACTIONS</th>
+                      </tr>
+                    </thead>
+<tbody style={{ backgroundColor: '#ffffff' }}>
+  {filteredAttendance.map((record) => (
+    <tr
+      key={record.id}
+      style={{ borderBottom: '1px solid #e2e8f0' }}
+      className="hover:bg-gray-50 transition-colors"
+    >
+      <td style={{ padding: '16px', fontSize: '28px' }}>{record.profile}</td>
 
-                        {/* NEW: Status column */}
-                        <div>
-                          <p className="text-xs text-gray-500">Status</p>
-                          <p className="text-sm">
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-sm font-medium ${
-                                record.status === "present"
-                                  ? "bg-green-100 text-green-800"
-                                  : record.status === "late"
-                                  ? "bg-orange-100 text-orange-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {record.status === "present" && <CheckCircle className="h-3 w-3 mr-1" />}
-                              {record.status === "late" && <AlertCircle className="h-3 w-3 mr-1" />}
-                              {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
-                            </span>
-                          </p>
-                        </div>
+      <td style={{ padding: '16px', fontSize: '14px', fontWeight: '400', color: '#0f172a' }}>
+        {record.name}
+      </td>
 
-                        <div>
-                          <p className="text-xs text-gray-500">Shift</p>
-                          <p className="text-sm">{record.shift}</p>
-                        </div>
+      <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>
+        {record.staffId}
+      </td>
 
-                        <div>
-                          <p className="text-xs text-gray-500">Check In/Out</p>
-                          <p className="text-sm font-medium">
-                            {record.checkInTime}
-                            {record.checkOutTime && ` - ${record.checkOutTime}`}
-                          </p>
-                        </div>
-                      </div>
+      <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>
+        {record.role}
+      </td>
 
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleEditAttendance(record)}
-                          className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 flex items-center gap-1"
-                        >
-                          <Edit className="h-3 w-3" />
-                          Edit
-                        </button>
+      <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>
+        {record.organization}
+      </td>
 
-                        {/* Check-out button (only shown when not checked out) */}
-                        {!record.checkOutTime && (
-                          <button
-                            onClick={() => handleCheckOut(record.id)}
-                            className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 flex items-center gap-1"
-                          >
-                            <Clock className="h-3 w-3" />
-                            Check-Out
-                          </button>
-                        )}
+      <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>
+        {record.room}
+      </td>
 
-                        <button
-                          onClick={() => setDeleteConfirm({ type: "attendance", id: record.id })}
-                          className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 flex items-center gap-1"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))
+      {/* ✅ STATUS BADGE */}
+      <td style={{ padding: '16px' }}>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '4px 12px',
+            borderRadius: '9999px',
+            fontSize: '11px',
+            fontWeight: '600',
+            textTransform: 'uppercase',
+            letterSpacing: '0.025em',
+            ...(record.status === "present"
+              ? { backgroundColor: '#d1fae5', color: '#065f46' }
+              : record.status === "late"
+                ? { backgroundColor: '#fed7aa', color: '#9a3412' }
+                : { backgroundColor: '#fee2e2', color: '#991b1b' })
+          }}
+        >
+          {record.status === "present" && (
+            <CheckCircle style={{ height: '12px', width: '12px', marginRight: '4px' }} />
+          )}
+          {record.status === "late" && (
+            <AlertCircle style={{ height: '12px', width: '12px', marginRight: '4px' }} />
+          )}
+          {record.status}
+        </span>
+      </td>
+
+      <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>
+        {record.shift}
+      </td>
+
+      <td style={{ padding: '16px' }}>
+        <div style={{ fontSize: '14px', fontWeight: '500', color: '#0f172a' }}>
+          {record.checkInTime}
+        </div>
+        {record.checkOutTime && (
+          <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px' }}>
+            {record.checkOutTime}
+          </div>
+        )}
+      </td>
+
+      {/* ✅ ADMIN APPROVAL DROPDOWN */}
+      <td style={{ padding: '16px', textAlign: 'center' }}>
+        <select
+          value={record.approval || "pending"}
+          onChange={(e) =>
+            handleUpdateApproval(
+              record.id,
+              e.target.value as "pending" | "accepted" | "rejected"
+            )
+          }
+          style={{
+            padding: '5px 10px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            backgroundColor:
+              record.approval === "accepted"
+                ? "#dcfce7"
+                : record.approval === "rejected"
+                  ? "#fee2e2"
+                  : "#ffedd5",
+            color:
+              record.approval === "accepted"
+                ? "#166534"
+                : record.approval === "rejected"
+                  ? "#7f1d1d"
+                  : "#9a3412",
+            border: "1px solid #cbd5f5"
+          }}
+        >
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </td>
+
+      {/* ACTION BUTTONS */}
+      <td style={{ padding: '16px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: '8px'
+          }}
+        >
+          <button
+            onClick={() => handleEditAttendance(record)}
+            style={{
+              padding: '8px',
+              color: '#9ca3af',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s'
+            }}
+            className="hover:text-blue-600 hover:bg-blue-50"
+            title="Edit"
+          >
+            <Edit style={{ height: '16px', width: '16px' }} />
+          </button>
+
+          {!record.checkOutTime && (
+            <button
+              onClick={() => handleCheckOut(record.id)}
+              style={{
+                padding: '8px',
+                color: '#9ca3af',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
+              }}
+              className="hover:text-yellow-600 hover:bg-yellow-50"
+              title="Check-Out"
+            >
+              <Clock style={{ height: '16px', width: '16px' }} />
+            </button>
+          )}
+
+          <button
+            onClick={() =>
+              setDeleteConfirm({ type: "attendance", id: record.id })
+            }
+            style={{
+              padding: '8px',
+              color: '#9ca3af',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s'
+            }}
+            className="hover:text-red-600 hover:bg-red-50"
+            title="Delete"
+          >
+            <Trash2 style={{ height: '16px', width: '16px' }} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  ))}
+</tbody>
+
+                  </table>
                 )}
               </div>
             </div>

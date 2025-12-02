@@ -8,7 +8,7 @@ import { Network } from '../models/network' // added
 export class AttendanceController {
   private normalize(doc: any) {
     if (!doc) return null;
-    const { _id, __v, organizationId, networkId, organization, ...rest } = doc;
+    const { _id, __v, organizationId, networkId, organization, approval, ...rest } = doc;
 
     const orgPop = organizationId && typeof organizationId === 'object' && (organizationId as any).name ? organizationId as any : null;
     const netPop = networkId && typeof networkId === 'object' && (networkId as any).name ? networkId as any : null;
@@ -20,6 +20,7 @@ export class AttendanceController {
       organizationId: orgPop ? String(orgPop._id) : (organizationId ? String((organizationId as any)._id ?? organizationId) : undefined),
       networkId: netPop ? String(netPop._id) : (networkId ? String((networkId as any)._id ?? networkId) : undefined),
       networkName: netPop ? netPop.name : undefined,
+      approval: approval || 'pending',
     };
   }
 
@@ -99,6 +100,7 @@ export class AttendanceController {
         checkOutTime: body.checkOutTime,
         date: body.date,
         status: body.status || 'present',
+        approval: body.approval || 'pending',
         notes: body.notes,
       }
 

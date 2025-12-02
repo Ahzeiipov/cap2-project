@@ -1,10 +1,11 @@
-import { Schema, model, Document, Types } from 'mongoose'
+// backend/src/models/appointment.ts
+import { Schema, model, Document } from 'mongoose'
 
 export interface IAppointment extends Document {
   patientName: string
   patientId: string
   doctorName: string
-  doctorRole?: string
+  service?: string      // descriptive clinic service (X-Ray, Lab, Vaccination...)
   date: string
   time: string
   room?: string
@@ -19,7 +20,7 @@ const AppointmentSchema = new Schema<IAppointment>(
     patientName: { type: String, required: true },
     patientId: { type: String, required: true },
     doctorName: { type: String, required: true },
-    doctorRole: String,
+    service: String,             // NEW: clinic service
     date: { type: String, required: true }, // yyyy-mm-dd
     time: { type: String, required: true },
     room: String,

@@ -10,8 +10,6 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
-  UserCircle,
-  Stethoscope,
 } from "lucide-react"
 import "./appointment.css"
 
@@ -22,11 +20,11 @@ interface Appointment {
   patientName: string
   patientId: string
   doctorName: string
-  doctorRole: string
+  service?: string
   date: string
   time: string
   room: string
-  reason: string
+  reason?: string
   notes?: string
 }
 
@@ -36,7 +34,7 @@ const initialAppointments: Appointment[] = [
     patientName: "John Doe",
     patientId: "P001",
     doctorName: "Dr. Sarah Johnson",
-    doctorRole: "General Physician",
+    service: "General Consultation",
     date: "2025-01-20",
     time: "09:00 AM",
     room: "Room 101",
@@ -47,7 +45,7 @@ const initialAppointments: Appointment[] = [
     patientName: "Emily Brown",
     patientId: "P002",
     doctorName: "Dr. Michael Chen",
-    doctorRole: "Cardiologist",
+    service: "ECG",
     date: "2025-01-20",
     time: "10:30 AM",
     room: "Room 203",
@@ -58,7 +56,7 @@ const initialAppointments: Appointment[] = [
     patientName: "Robert Wilson",
     patientId: "P003",
     doctorName: "Dr. Sarah Johnson",
-    doctorRole: "General Physician",
+    service: "Follow-up Consultation",
     date: "2025-01-20",
     time: "02:00 PM",
     room: "Room 101",
@@ -69,7 +67,7 @@ const initialAppointments: Appointment[] = [
     patientName: "Lisa Anderson",
     patientId: "P004",
     doctorName: "Dr. James Martinez",
-    doctorRole: "Pediatrician",
+    service: "Vaccination",
     date: "2025-01-21",
     time: "11:00 AM",
     room: "Room 105",
@@ -80,7 +78,7 @@ const initialAppointments: Appointment[] = [
     patientName: "David Lee",
     patientId: "P005",
     doctorName: "Dr. Michael Chen",
-    doctorRole: "Cardiologist",
+    service: "Post-op Check",
     date: "2025-01-19",
     time: "03:00 PM",
     room: "Room 203",
@@ -103,7 +101,18 @@ const timeSlots = [
 ]
 
 const doctors = ["Dr. Sarah Johnson", "Dr. Michael Chen", "Dr. James Martinez", "Dr. Emily White"]
-const specializations = ["General Physician", "Cardiologist", "Pediatrician", "Dermatologist"]
+
+// services list (clinic services)
+const services = [
+  "General Consultation",
+  "X-Ray",
+  "Laboratory",
+  "Physiotherapy",
+  "Vaccination",
+  "Ultrasound",
+  "ECG",
+  "Minor Procedures",
+]
 
 export function AppointmentsPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
@@ -117,7 +126,7 @@ export function AppointmentsPage() {
     patientName: "",
     patientId: "",
     doctorName: "",
-    doctorRole: "",
+    service: "", // <- now service
     date: "",
     time: "",
     room: "",
@@ -133,11 +142,11 @@ export function AppointmentsPage() {
     patientName: a.patientName,
     patientId: a.patientId,
     doctorName: a.doctorName,
-    doctorRole: a.doctorRole,
+    service: a.service ?? "",
     date: a.date,
     time: a.time,
-    room: a.room,
-    reason: a.reason,
+    room: a.room ?? "",
+    reason: a.reason ?? "",
     notes: a.notes ?? "",
   })
 
@@ -197,34 +206,61 @@ export function AppointmentsPage() {
     }
   }, [])
 
+  const isSlotAvailable = (doctorName: string, patientId: string, date: string, time: string, excludeId?: string) => {
+  return !appointments.some((apt) => {
+    if (excludeId && apt.id === excludeId) return false; // skip current appointment when updating
+    return (
+      apt.date === date &&
+      apt.time === time &&
+      (apt.doctorName === doctorName || apt.patientId === patientId)
+    );
+  });
+}
+
   // create appointment -> persist
-  const handleCreateAppointment = async () => {
-    try {
-      const payload = { ...formData }
-      const created = await createAppointmentAPI(payload)
-      setAppointments((prev) => [created, ...prev])
-      setIsDialogOpen(false)
-      resetForm()
-    } catch (err) {
-      console.error("Create appointment failed", err)
-      alert("Failed to create appointment")
-    }
+const handleCreateAppointment = async () => {
+  const { doctorName, patientId, date, time } = formData;
+
+  if (!isSlotAvailable(doctorName, patientId, date, time)) {
+    alert("This doctor or patient already has an appointment at this time!");
+    return;
   }
 
-  // update appointment -> persist
-  const handleUpdateAppointment = async () => {
-    try {
-      if (!selectedAppointment) return
-      const payload = { ...formData }
-      const updated = await updateAppointmentAPI(selectedAppointment.id, payload)
-      setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
-      setIsDialogOpen(false)
-      resetForm()
-    } catch (err) {
-      console.error("Update appointment failed", err)
-      alert("Failed to update appointment")
-    }
+  try {
+    const payload = { ...formData };
+    const created = await createAppointmentAPI(payload);
+    setAppointments((prev) => [created, ...prev]);
+    setIsDialogOpen(false);
+    resetForm();
+  } catch (err) {
+    console.error("Create appointment failed", err);
+    alert("Failed to create appointment");
   }
+}
+
+
+  // update appointment -> persist
+const handleUpdateAppointment = async () => {
+  if (!selectedAppointment) return;
+
+  const { doctorName, patientId, date, time } = formData;
+
+  if (!isSlotAvailable(doctorName, patientId, date, time, selectedAppointment.id)) {
+    alert("This doctor or patient already has an appointment at this time!");
+    return;
+  }
+
+  try {
+    const payload = { ...formData };
+    const updated = await updateAppointmentAPI(selectedAppointment.id, payload);
+    setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    setIsDialogOpen(false);
+    resetForm();
+  } catch (err) {
+    console.error("Update appointment failed", err);
+    alert("Failed to update appointment");
+  }
+}
 
   // delete appointment
   const handleDeleteAppointment = async (id: string) => {
@@ -239,10 +275,12 @@ export function AppointmentsPage() {
   }
 
   const filteredAppointments = appointments.filter((apt) => {
+    const q = searchQuery.toLowerCase()
     const matchesSearch =
-      apt.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      apt.doctorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      apt.patientId.toLowerCase().includes(searchQuery.toLowerCase())
+      apt.patientName.toLowerCase().includes(q) ||
+      apt.doctorName.toLowerCase().includes(q) ||
+      apt.patientId.toLowerCase().includes(q) ||
+      (apt.service ?? "").toLowerCase().includes(q)
     return matchesSearch
   })
 
@@ -273,7 +311,7 @@ export function AppointmentsPage() {
       patientName: "",
       patientId: "",
       doctorName: "",
-      doctorRole: "",
+      service: "",
       date: "",
       time: "",
       room: "",
@@ -286,8 +324,15 @@ export function AppointmentsPage() {
   const openEditDialog = (appointment: Appointment) => {
     setSelectedAppointment(appointment)
     setFormData({
-      ...appointment,
-      notes: appointment.notes || "",
+      patientName: appointment.patientName,
+      patientId: appointment.patientId,
+      doctorName: appointment.doctorName,
+      service: appointment.service ?? "",
+      date: appointment.date,
+      time: appointment.time,
+      room: appointment.room,
+      reason: appointment.reason ?? "",
+      notes: appointment.notes ?? "",
     })
     setIsDialogOpen(true)
   }
@@ -319,7 +364,7 @@ export function AppointmentsPage() {
           <div className="card-header">
             <div className="header-left">
               <h2 className="card-title">Appointments</h2>
-              
+
               {/* View Toggle */}
               <div className="view-toggle">
                 <button
@@ -406,7 +451,7 @@ export function AppointmentsPage() {
                 <input
                   type="text"
                   className="search-input"
-                  placeholder="Search by patient name, doctor, or ID..."
+                  placeholder="Search by patient name, doctor, service or ID..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -424,7 +469,7 @@ export function AppointmentsPage() {
 
                         <p className="doctor-info">
                           <User className="w-4 h-4" />
-                          <span className="font-medium">{appointment.doctorName}</span> - {appointment.doctorRole}
+                          <span className="font-medium">{appointment.doctorName}</span>{appointment.service ? ` - ${appointment.service}` : ""}
                         </p>
 
                         <div className="appointment-meta">
@@ -523,15 +568,16 @@ export function AppointmentsPage() {
                   </select>
                 </div>
                 <div className="form-field">
-                  <label className="form-label">Specialization</label>
+                  {/* Label is Service now */}
+                  <label className="form-label">Service</label>
                   <select
                     className="form-select"
-                    value={formData.doctorRole}
-                    onChange={(e) => setFormData({ ...formData, doctorRole: e.target.value })}
+                    value={formData.service}
+                    onChange={(e) => setFormData({ ...formData, service: e.target.value })}
                   >
-                    <option value="">Select specialization</option>
-                    {specializations.map((spec) => (
-                      <option key={spec} value={spec}>{spec}</option>
+                    <option value="">Select service</option>
+                    {services.map((svc) => (
+                      <option key={svc} value={svc}>{svc}</option>
                     ))}
                   </select>
                 </div>
@@ -612,3 +658,5 @@ export function AppointmentsPage() {
     </div>
   )
 }
+
+export default AppointmentsPage

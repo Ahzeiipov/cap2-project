@@ -98,6 +98,8 @@ npm install react-qr-reader@3.0.0-beta-1 --legacy-peer-deps
 cd "C:\Year 4\cap2-project\backend"
 npm install mongoose dotenv
 npm install -D @types/mongoose
+npm install @inertiajs/react
+
 
 
 # open backend folder
