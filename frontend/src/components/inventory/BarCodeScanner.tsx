@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 // @ts-ignore - react-qr-reader types may not be available
 import { QrReader } from 'react-qr-reader';
 import '../../assets/style/inventory/barcodeScanner.css';
+import { inventoryService } from '../../services/api/inventoryService';
 
 interface BarCodeScannerProps {
   isOpen: boolean;
   onClose: () => void;
-  onScanSuccess?: (data: string) => void;
+  onScanSuccess?: (data: { medicineId: string; medicineName: string; groupId: string }) => void;
 }
 
 const BarCodeScanner: React.FC<BarCodeScannerProps> = ({
@@ -18,6 +19,7 @@ const BarCodeScanner: React.FC<BarCodeScannerProps> = ({
   const [scanning, setScanning] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scannedData, setScannedData] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -62,19 +64,40 @@ const BarCodeScanner: React.FC<BarCodeScannerProps> = ({
     }
   };
 
-  const handleImageUpload = () => {
+  const handleImageUpload = async () => {
     // Create file input element
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = (e: any) => {
+    input.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (file) {
-        // Handle image file upload for QR code scanning
-        // You can use a library like jsQR or qr-scanner to decode from image
-        console.log('Image uploaded:', file);
-        // For now, just show a message
-        alert('Image upload feature - implement QR decoding from image');
+        setIsProcessing(true);
+        setError(null);
+        setScanning(false);
+        
+        try {
+          // Call backend to scan barcode image
+          const result = await inventoryService.scanBarcode(file);
+          
+          setScannedData(`Found: ${result.medicineName}`);
+          
+          // Call success callback with medicine info
+          if (onScanSuccess) {
+            onScanSuccess(result);
+          }
+          
+          // Auto close after successful scan (navigation will happen via callback)
+          setTimeout(() => {
+            onClose();
+          }, 500);
+        } catch (err: any) {
+          console.error('Barcode scan error:', err);
+          setError(err.message || 'Failed to scan barcode image. No matching medicine found.');
+          setScanning(true);
+        } finally {
+          setIsProcessing(false);
+        }
       }
     };
     input.click();
@@ -149,7 +172,7 @@ const BarCodeScanner: React.FC<BarCodeScannerProps> = ({
         <div className="scanner-status">
           <div className="status-indicator"></div>
           <span className="status-text">
-            {scannedData ? 'Scan successful!' : scanning ? 'Ready to scan' : 'Scanning...'}
+            {isProcessing ? 'Processing image...' : scannedData ? 'Scan successful!' : scanning ? 'Ready to scan' : 'Scanning...'}
           </span>
         </div>
 

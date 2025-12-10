@@ -6,13 +6,15 @@ interface InventoryBarProps {
   showBackButton?: boolean;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  showSearchBar?: boolean;
 }
 
 const InventoryBar: React.FC<InventoryBarProps> = ({
   onBack,
   showBackButton = false,
   searchValue = '',
-  onSearchChange
+  onSearchChange,
+  showSearchBar = true
 }) => {
   return (
     <div className="inventory-bar">
@@ -29,6 +31,7 @@ const InventoryBar: React.FC<InventoryBarProps> = ({
           <p className="inventory-subtitle">Manage and monitor medicine stock</p>
         </div>
       </div>
+      {showSearchBar && (
       <div className="inventory-bar-right">
         <div className="search-box">
           <span className="search-icon">🔍</span>
@@ -41,6 +44,7 @@ const InventoryBar: React.FC<InventoryBarProps> = ({
           />
         </div>
       </div>
+      )}
     </div>
   );
 };

@@ -6,37 +6,79 @@ import AddNewMedicineModal from '../../components/inventory/AddNewMedicineModal'
 import EditMedicineModal from '../../components/inventory/EditMedicineModal';
 import MedicineDetail from './medicineDetail';
 import InventoryBar from '../../components/layout/inventoryBar';
-import { getMedicinesByGroup, getMedicineDetail } from '../../data/inventoryData';
-import type { MedicineListItem } from '../../data/inventoryData';
-
+import { inventoryService } from '../../services/api/inventoryService';
 
 interface MedicineListProps {
   groupName: string;
+  groupId: string;
   onBack: () => void;
+  onMedicineAdded?: () => void; // Callback to refresh parent groups
+  initialMedicineId?: string; // Medicine ID to auto-select when component loads
+  onInitialMedicineSelected?: () => void; // Callback when initial medicine is selected
 }
 
-const MedicineList: React.FC<MedicineListProps> = ({ groupName, onBack }) => {
+interface Medicine {
+  _id: string;
+  id?: string;
+  name: string;
+  description?: string;
+  barcode?: number;
+  barcode_value?: string;
+  barcode_image?: string;
+  group_medicine_id?: any;
+}
+
+const MedicineList: React.FC<MedicineListProps> = ({ groupName, groupId, onBack, onMedicineAdded, initialMedicineId, onInitialMedicineSelected }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isAddMedicineModalOpen, setIsAddMedicineModalOpen] = useState(false);
   const [isEditMedicineModalOpen, setIsEditMedicineModalOpen] = useState(false);
   const [selectedMedicine, setSelectedMedicine] = useState<{ id: string; name: string } | null>(null);
   const [editingMedicineId, setEditingMedicineId] = useState<string | null>(null);
-  const [medicines, setMedicines] = useState<MedicineListItem[]>([]);
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initialize medicines from dummy data
+  // Fetch medicines from API when groupId or searchTerm changes
   useEffect(() => {
-    const initialMedicines = getMedicinesByGroup(groupName);
-    setMedicines(initialMedicines);
-  }, [groupName]);
+    loadMedicines();
+  }, [groupId, searchTerm]);
+
+  // Auto-select medicine if initialMedicineId is provided
+  useEffect(() => {
+    if (initialMedicineId && medicines.length > 0 && !selectedMedicine) {
+      const medicine = medicines.find(m => (m._id || m.id) === initialMedicineId);
+      if (medicine) {
+        setSelectedMedicine({ id: medicine._id || medicine.id || '', name: medicine.name });
+        if (onInitialMedicineSelected) {
+          onInitialMedicineSelected();
+        }
+      }
+    }
+  }, [initialMedicineId, medicines, onInitialMedicineSelected, selectedMedicine]);
+
+  const loadMedicines = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await inventoryService.getMedicinesByGroupId(groupId, searchTerm || undefined);
+      setMedicines(data);
+    } catch (err: any) {
+      console.error('Failed to load medicines:', err);
+      setError(err.message || 'Failed to load medicines');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleScanBarcode = () => {
     setIsScannerOpen(true);
   };
 
-  const handleScanSuccess = (data: string) => {
-    console.log('Scanned data:', data);
-    alert(`Scanned: ${data}`);
+  const handleScanSuccess = (data: { medicineId: string; medicineName: string; groupId: string }) => {
+    console.log('Scanned medicine:', data);
+    // Navigate directly to medicine detail page
+    setSelectedMedicine({ id: data.medicineId, name: data.medicineName });
   };
 
   const handleCloseScanner = () => {
@@ -47,22 +89,18 @@ const MedicineList: React.FC<MedicineListProps> = ({ groupName, onBack }) => {
     setIsAddMedicineModalOpen(true);
   };
 
-  const handleSaveMedicine = (medicineData: {
-    name: string;
-    group: string;
-    description: string;
-    barcode?: File;
-    photo?: File;
-  }) => {
-    const newMedicine: MedicineListItem = {
-      id: `med-${Date.now()}`,
-      name: medicineData.name,
-      stock: 0,
-      status: 'Out of Stock'
-    };
-    setMedicines(prev => [...prev, newMedicine]);
-    console.log('New medicine added:', newMedicine);
-    setIsAddMedicineModalOpen(false);
+  const handleSaveMedicine = async (medicine: Medicine) => {
+    try {
+      await loadMedicines(); // Reload medicines to get updated counts
+      setIsAddMedicineModalOpen(false);
+      // Notify parent to refresh medicine groups (to update totalMedicines count)
+      if (onMedicineAdded) {
+        onMedicineAdded();
+      }
+    } catch (err: any) {
+      console.error('Error refreshing medicines:', err);
+      alert('Medicine created but failed to refresh list');
+    }
   };
 
   const handleCloseAddMedicineModal = () => {
@@ -74,24 +112,33 @@ const MedicineList: React.FC<MedicineListProps> = ({ groupName, onBack }) => {
     setIsEditMedicineModalOpen(true);
   };
 
-  const handleSaveEditMedicine = (medicineData: {
+  // Helper to get medicine ID
+  const getMedicineId = (medicine: Medicine): string => {
+    return medicine._id || medicine.id || '';
+  };
+
+  const handleSaveEditMedicine = async (medicineData: {
     id: string;
     name: string;
     group: string;
     description: string;
-    barcode?: File;
+    barcode_image?: File;
     photo?: File;
   }) => {
-    setMedicines(prev =>
-      prev.map(med =>
-        med.id === medicineData.id
-          ? { ...med, name: medicineData.name }
-          : med
-      )
-    );
-    console.log('Medicine updated:', medicineData);
-    setIsEditMedicineModalOpen(false);
-    setEditingMedicineId(null);
+    try {
+      await inventoryService.updateMedicine(medicineData.id, {
+        name: medicineData.name,
+        description: medicineData.description,
+        barcode_image: medicineData.barcode_image,
+        photo: medicineData.photo,
+      });
+      await loadMedicines(); // Reload medicines
+      setIsEditMedicineModalOpen(false);
+      setEditingMedicineId(null);
+    } catch (err: any) {
+      console.error('Error updating medicine:', err);
+      alert(err.message || 'Failed to update medicine');
+    }
   };
 
   const handleCloseEditMedicineModal = () => {
@@ -99,17 +146,22 @@ const MedicineList: React.FC<MedicineListProps> = ({ groupName, onBack }) => {
     setEditingMedicineId(null);
   };
 
-  const handleDeleteMedicine = (medicineId: string) => {
+  const handleDeleteMedicine = async (medicineId: string) => {
     if (window.confirm('Are you sure you want to delete this medicine? This action cannot be undone.')) {
-      setMedicines(prev => prev.filter(med => med.id !== medicineId));
-      console.log('Medicine deleted:', medicineId);
+      try {
+        await inventoryService.deleteMedicine(medicineId);
+        await loadMedicines(); // Reload medicines
+      } catch (err: any) {
+        console.error('Error deleting medicine:', err);
+        alert(err.message || 'Failed to delete medicine');
+      }
     }
   };
 
   const handleDetailClick = (medicineId: string) => {
-    const medicine = medicines.find(m => m.id === medicineId);
+    const medicine = medicines.find(m => m._id === medicineId || m.id === medicineId);
     if (medicine) {
-      setSelectedMedicine({ id: medicine.id, name: medicine.name });
+      setSelectedMedicine({ id: medicine._id || medicine.id || '', name: medicine.name });
     }
   };
 
@@ -154,56 +206,95 @@ const MedicineList: React.FC<MedicineListProps> = ({ groupName, onBack }) => {
 
       {/* Medicine Table */}
       <div className="table-wrapper">
-        <table className="medicine-table">
-          <thead>
-            <tr>
-              <th>Medicine Name</th>
-              <th>Stock</th>
-              <th>Status</th>
-              <th>Actions</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {medicines.map((medicine, index) => (
-              <tr key={medicine.id} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
-                <td className="medicine-name">{medicine.name}</td>
-                <td className="medicine-stock">{medicine.stock}</td>
-                <td>
-                  <MedicineStatus status={medicine.status} />
-                </td>
-                <td className="actions-cell">
-                  <button
-                    className="action-link edit-link"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditMedicine(medicine.id);
-                    }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="action-link delete-link"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteMedicine(medicine.id);
-                    }}
-                  >
-                    Delete
-                  </button>
-                </td>
-                <td className="detail-cell">
-                  <button
-                    className="detail-link"
-                    onClick={() => handleDetailClick(medicine.id)}
-                  >
-                    Detail....
-                  </button>
-                </td>
+        {error && (
+          <div style={{ 
+            padding: '10px', 
+            backgroundColor: '#fee', 
+            color: '#c33', 
+            borderRadius: '4px',
+            marginBottom: '20px'
+          }}>
+            Error: {error}
+            <button 
+              onClick={loadMedicines}
+              style={{ 
+                marginLeft: '10px', 
+                padding: '4px 8px',
+                cursor: 'pointer'
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            Loading medicines...
+          </div>
+        ) : (
+          <table className="medicine-table">
+            <thead>
+              <tr>
+                <th>Medicine Name</th>
+                <th>Description</th>
+                <th>Barcode</th>
+                <th>Actions</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {medicines.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '20px' }}>
+                    No medicines found. Click "Add New Medicine" to create one.
+                  </td>
+                </tr>
+              ) : (
+                medicines.map((medicine, index) => {
+                  const medicineId = medicine._id || medicine.id || '';
+                  return (
+                    <tr key={medicineId} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
+                      <td className="medicine-name">{medicine.name}</td>
+                      <td className="medicine-description">{medicine.description || '-'}</td>
+                      <td className="medicine-barcode">
+                        {medicine.barcode_value || medicine.barcode || '-'}
+                      </td>
+                      <td className="actions-cell">
+                        <button
+                          className="action-link edit-link"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditMedicine(medicineId);
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="action-link delete-link"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteMedicine(medicineId);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                      <td className="detail-cell">
+                        <button
+                          className="detail-link"
+                          onClick={() => handleDetailClick(medicineId)}
+                        >
+                          Detail....
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Barcode Scanner Modal */}
@@ -219,12 +310,12 @@ const MedicineList: React.FC<MedicineListProps> = ({ groupName, onBack }) => {
         onClose={handleCloseAddMedicineModal}
         onSave={handleSaveMedicine}
         groupName={groupName}
+        groupId={groupId}
       />
 
       {/* Edit Medicine Modal */}
       {editingMedicineId && (() => {
-        const medicine = medicines.find(m => m.id === editingMedicineId);
-        const medicineDetail = medicine ? getMedicineDetail(editingMedicineId) : null;
+        const medicine = medicines.find(m => (m._id || m.id) === editingMedicineId);
         return medicine ? (
           <EditMedicineModal
             isOpen={isEditMedicineModalOpen}
@@ -233,7 +324,7 @@ const MedicineList: React.FC<MedicineListProps> = ({ groupName, onBack }) => {
             medicineId={editingMedicineId}
             currentName={medicine.name}
             currentGroup={groupName}
-            currentDescription={medicineDetail?.description.genericName || ''}
+            currentDescription={medicine.description || ''}
           />
         ) : null;
       })()}

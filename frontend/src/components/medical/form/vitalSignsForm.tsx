@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../../../assets/style/medical/form/vitalSignForm.css';
 
 interface VitalSignsData {
@@ -13,7 +13,23 @@ interface VitalSignsData {
   oxygenSaturation: string;
 }
 
-const VitalSigns: React.FC = () => {
+interface VitalSignsProps {
+  initialData?: {
+    vitalSigns?: {
+      height?: number;
+      heightUnit?: 'cm' | 'in';
+      weight?: number;
+      weightUnit?: 'kg' | 'lb';
+      bloodPressure?: string;
+      pulseRate?: number;
+      temperature?: number;
+      respiratoryRate?: number;
+      oxygenSaturation?: number;
+    };
+  };
+}
+
+const VitalSigns: React.FC<VitalSignsProps> = ({ initialData }) => {
   const [formData, setFormData] = useState<VitalSignsData>({
     height: '',
     heightUnit: 'cm',
@@ -25,6 +41,23 @@ const VitalSigns: React.FC = () => {
     respiratoryRate: '',
     oxygenSaturation: ''
   });
+
+  // Populate form when initialData changes
+  useEffect(() => {
+    if (initialData?.vitalSigns) {
+      setFormData({
+        height: initialData.vitalSigns.height?.toString() || '',
+        heightUnit: initialData.vitalSigns.heightUnit || 'cm',
+        weight: initialData.vitalSigns.weight?.toString() || '',
+        weightUnit: initialData.vitalSigns.weightUnit || 'kg',
+        bloodPressure: initialData.vitalSigns.bloodPressure || '',
+        pulseRate: initialData.vitalSigns.pulseRate?.toString() || '',
+        temperature: initialData.vitalSigns.temperature?.toString() || '',
+        respiratoryRate: initialData.vitalSigns.respiratoryRate?.toString() || '',
+        oxygenSaturation: initialData.vitalSigns.oxygenSaturation?.toString() || ''
+      });
+    }
+  }, [initialData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

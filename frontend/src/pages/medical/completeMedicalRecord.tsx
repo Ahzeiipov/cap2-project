@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import '../../assets/style/medical/CompleteMedicalRecord.css';
 import type { MedicalRecordData } from './page';
+import { medicalRecordService, type MedicalRecord } from '../../services/api/medicalRecordService';
 
 // Import all your form components
 import PatientForm from '../../components/medical/form/patientForm';
@@ -11,7 +12,7 @@ import TreatmentPlan from '../../components/medical/form/treatmentForm';
 
 interface CompleteMedicalRecordProps {
   onBack?: () => void;
-  editingRecord?: MedicalRecordData | null;
+  editingRecord?: MedicalRecordData | MedicalRecord | null;
   onAddRecord?: (record: MedicalRecordData) => void;
   onUpdateRecord?: (record: MedicalRecordData) => void;
 }
@@ -23,213 +24,387 @@ const CompleteMedicalRecord: React.FC<CompleteMedicalRecordProps> = ({
   onUpdateRecord
 }) => {
   const formRef = useRef<HTMLDivElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fullRecord, setFullRecord] = useState<MedicalRecord | null>(null);
 
-  const collectFormData = (): Partial<MedicalRecordData> => {
+  // Fetch full record data when editingRecord is provided
+  useEffect(() => {
+    const fetchFullRecord = async () => {
+      if (editingRecord) {
+        try {
+          // If editingRecord is already a full MedicalRecord, use it
+          if ('patient' in editingRecord && 'visit' in editingRecord) {
+            setFullRecord(editingRecord as MedicalRecord);
+          } else {
+            // Otherwise, fetch it using recordId or _id
+            const recordId = (editingRecord as MedicalRecordData).recordId;
+            if (recordId) {
+              const record = await medicalRecordService.getByRecordId(recordId);
+              setFullRecord(record);
+            } else if ((editingRecord as any)._id) {
+              const record = await medicalRecordService.getById((editingRecord as any)._id);
+              setFullRecord(record);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch full record:', err);
+        }
+      } else {
+        setFullRecord(null);
+      }
+    };
+    fetchFullRecord();
+  }, [editingRecord]);
+
+  // Populate diagnosis fields when fullRecord is loaded
+  useEffect(() => {
+    if (fullRecord && formRef.current) {
+      const diagnosisTextarea = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="diagnosis"]');
+      const testsOrderedTextarea = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="testsOrdered"]');
+      
+      if (diagnosisTextarea && fullRecord.diagnosis?.diagnosis) {
+        diagnosisTextarea.value = fullRecord.diagnosis.diagnosis;
+      }
+      if (testsOrderedTextarea && fullRecord.diagnosis?.testsOrdered) {
+        testsOrderedTextarea.value = fullRecord.diagnosis.testsOrdered;
+      }
+    }
+  }, [fullRecord]);
+
+  const collectAllFormData = (): Partial<MedicalRecord> => {
     if (!formRef.current) return {};
 
     // Collect patient form data
     const patientNameInput = formRef.current.querySelector<HTMLInputElement>('input[name="name"]');
     const patientIdInput = formRef.current.querySelector<HTMLInputElement>('input[name="id"]');
     const ageInput = formRef.current.querySelector<HTMLInputElement>('input[name="age"]');
-    const genderInput = formRef.current.querySelector<HTMLInputElement>('input[name="gender"]:checked');
+    
+    // Get gender from checked radio button - check the label text since radio buttons don't have value attributes
+    const genderRadioInputs = formRef.current.querySelectorAll<HTMLInputElement>('input[name="gender"]');
+    const checkedGenderRadio = Array.from(genderRadioInputs).find(input => input.checked);
+    let gender: 'Female' | 'Male' | 'Other' = 'Other';
+    if (checkedGenderRadio) {
+      const labelText = checkedGenderRadio.parentElement?.querySelector('.radio-label')?.textContent?.trim() || '';
+      if (labelText === 'Female') {
+        gender = 'Female';
+      } else if (labelText === 'Male') {
+        gender = 'Male';
+      } else if (labelText === 'Other') {
+        gender = 'Other';
+      }
+    }
+    
+    const dateOfBirthInput = formRef.current.querySelector<HTMLInputElement>('input[name="dateOfBirth"]');
+    const addressInput = formRef.current.querySelector<HTMLInputElement>('input[name="address"]');
+    const contactInput = formRef.current.querySelector<HTMLInputElement>('input[name="contactNumber"]');
     const dateOfVisitInput = formRef.current.querySelector<HTMLInputElement>('input[name="dateOfVisit"]');
     
+    // Collect medical history
+    const reasonOfVisitInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="reasonOfVisit"]');
+    // Collect allergies status - radio buttons (name="allergies" in medical history)
+    // Check which radio is selected by looking at the parent label text
+    const allergiesRadioInputs = formRef.current.querySelectorAll<HTMLInputElement>('input[name="allergies"]');
+    const checkedAllergiesRadio = Array.from(allergiesRadioInputs).find(input => input.checked);
+    let allergiesStatus: 'no-known' | 'has-allergies' = 'no-known';
+    if (checkedAllergiesRadio) {
+      const labelText = checkedAllergiesRadio.parentElement?.querySelector('.radio-label-inline')?.textContent?.toLowerCase() || '';
+      allergiesStatus = labelText.includes('has allergies') ? 'has-allergies' : 'no-known';
+    }
+    const allergiesDetailsInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="allergiesDetails"]');
+    const currentMedicationsInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="currentMedications"]');
+    // Collect chronic diseases - get label text from checked checkboxes
+    const chronicDiseasesInputs = formRef.current.querySelectorAll<HTMLInputElement>('.checkbox-group input[type="checkbox"]:checked');
+    const chronicDiseases = Array.from(chronicDiseasesInputs).map(input => {
+      // Get the label text (next sibling span with class checkbox-label)
+      const label = input.parentElement?.querySelector('.checkbox-label');
+      return label?.textContent?.trim() || '';
+    }).filter(text => text && !text.includes('No Known Allergies') && !text.includes('Has Allergies')); // Filter out placeholder labels
+    const chronicDiseasesDetailsInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="chronicDiseasesDetails"]');
+    const pastSurgeriesInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="pastSurgeries"]');
+    const familyHistoriesInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="familyHistories"]');
+    
+    // Collect vital signs
+    const heightInput = formRef.current.querySelector<HTMLInputElement>('input[name="height"]');
+    const heightUnitSelect = formRef.current.querySelector<HTMLSelectElement>('select[name="heightUnit"]');
+    const weightInput = formRef.current.querySelector<HTMLInputElement>('input[name="weight"]');
+    const weightUnitSelect = formRef.current.querySelector<HTMLSelectElement>('select[name="weightUnit"]');
+    const bloodPressureInput = formRef.current.querySelector<HTMLInputElement>('input[name="bloodPressure"]');
+    const pulseRateInput = formRef.current.querySelector<HTMLInputElement>('input[name="pulseRate"]');
+    const temperatureInput = formRef.current.querySelector<HTMLInputElement>('input[name="temperature"]');
+    const respiratoryRateInput = formRef.current.querySelector<HTMLInputElement>('input[name="respiratoryRate"]');
+    const oxygenSaturationInput = formRef.current.querySelector<HTMLInputElement>('input[name="oxygenSaturation"]');
+    
+    // Collect physical examination
+    const generalAppearanceInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="generalAppearance"]');
+    const cardiovascularInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="cardiovascular"]');
+    const respiratoryInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="respiratory"]');
+    const abdominalInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="abdominal"]');
+    const neurologicalInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="neurological"]');
+    const additionalFindingsInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="additionalFindings"]');
+    
     // Collect diagnosis
-    const diagnosisTextarea = formRef.current.querySelector<HTMLTextAreaElement>('.diagnosis-textarea');
+    const diagnosisTextarea = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="diagnosis"]');
+    const testsOrderedTextarea = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="testsOrdered"]');
+    
+    // Collect treatment plan
+    const medicationsPrescribedInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="medicationsPrescribed"]');
+    const proceduresPerformedInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="proceduresPerformed"]');
+    const instructionInput = formRef.current.querySelector<HTMLTextAreaElement>('textarea[name="instruction"]');
     
     // Default doctor (can be made dynamic)
     const doctor = 'Dr. Michael Chen';
 
+    // Calculate age from date of birth if not provided
+    let age = parseInt(ageInput?.value || '0');
+    if (!age && dateOfBirthInput?.value) {
+      const birthDate = new Date(dateOfBirthInput.value);
+      const today = new Date();
+      age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+    }
+
     return {
-      patientName: patientNameInput?.value || '',
-      patientId: patientIdInput?.value || '',
-      age: parseInt(ageInput?.value || '0'),
-      gender: genderInput?.value || '',
-      dateOfVisit: dateOfVisitInput?.value || new Date().toLocaleDateString(),
+      patient: {
+        name: patientNameInput?.value || '',
+        id: patientIdInput?.value || '',
+        gender: gender, // Use the gender extracted from radio button label
+        dateOfBirth: dateOfBirthInput?.value || new Date().toISOString(),
+        age: age || 0,
+        address: addressInput?.value || '',
+        contactNumber: contactInput?.value || ''
+      },
+      visit: {
+        dateOfVisit: dateOfVisitInput?.value || new Date().toISOString(),
+        doctor: doctor,
+        reasonOfVisit: reasonOfVisitInput?.value || ''
+      },
+      medicalHistory: {
+        allergiesStatus: allergiesStatus,
+        allergiesDetails: allergiesDetailsInput?.value || '',
+        currentMedications: currentMedicationsInput?.value || '',
+        chronicDiseases: chronicDiseases,
+        chronicDiseasesDetails: chronicDiseasesDetailsInput?.value || '',
+        pastSurgeries: pastSurgeriesInput?.value || '',
+        familyHistories: familyHistoriesInput?.value || ''
+      },
+      vitalSigns: {
+        height: parseFloat(heightInput?.value || '0'),
+        heightUnit: (heightUnitSelect?.value as 'cm' | 'in') || 'cm',
+        weight: parseFloat(weightInput?.value || '0'),
+        weightUnit: (weightUnitSelect?.value as 'kg' | 'lb') || 'kg',
+        bloodPressure: bloodPressureInput?.value || '',
+        pulseRate: pulseRateInput?.value ? parseFloat(pulseRateInput.value) : undefined,
+        temperature: temperatureInput?.value ? parseFloat(temperatureInput.value) : undefined,
+        respiratoryRate: respiratoryRateInput?.value ? parseFloat(respiratoryRateInput.value) : undefined,
+        oxygenSaturation: oxygenSaturationInput?.value ? parseFloat(oxygenSaturationInput.value) : undefined
+      },
+      physicalExamination: {
+        generalAppearance: generalAppearanceInput?.value || '',
+        cardiovascular: cardiovascularInput?.value || '',
+        respiratory: respiratoryInput?.value || '',
+        abdominal: abdominalInput?.value || '',
+        neurological: neurologicalInput?.value || '',
+        additionalFindings: additionalFindingsInput?.value || ''
+      },
+      diagnosis: {
       diagnosis: diagnosisTextarea?.value || '',
-      doctor: doctor
+        testsOrdered: testsOrderedTextarea?.value || ''
+      },
+      treatmentPlan: {
+        medicationsPrescribed: medicationsPrescribedInput?.value || '',
+        proceduresPerformed: proceduresPerformedInput?.value || '',
+        instruction: instructionInput?.value || ''
+      }
     };
   };
 
-  const handleSubmit = () => {
-    const formData = collectFormData();
+  const handleSubmit = async () => {
+    const formData = collectAllFormData();
     
-    console.log('Collected form data:', formData);
-    
-    if (!formData.patientName || !formData.patientId) {
+    // Validate required fields
+    if (!formData.patient?.name || !formData.patient?.id) {
       alert('Please fill in at least Patient Name and Patient ID');
       return;
     }
 
-    const recordId = editingRecord?.recordId || `MR-2024-${String(Date.now()).slice(-6)}`;
-    const newRecord: MedicalRecordData = {
+    if (!formData.patient?.gender) {
+      alert('Please select Patient Gender');
+      return;
+    }
+
+    if (!formData.patient?.dateOfBirth) {
+      alert('Please fill in Date of Birth');
+      return;
+    }
+
+    if (!formData.visit?.dateOfVisit || !formData.visit?.doctor) {
+      alert('Please fill in Date of Visit and Doctor name');
+      return;
+    }
+
+    if (!formData.medicalHistory?.allergiesStatus) {
+      alert('Please select Allergies Status');
+      return;
+    }
+
+    if (!formData.vitalSigns?.height || !formData.vitalSigns?.weight || !formData.vitalSigns?.heightUnit || !formData.vitalSigns?.weightUnit) {
+      alert('Please fill in Height, Weight, and their units in Vital Signs section');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const recordId = fullRecord?.recordId || (editingRecord as any)?.recordId || `MR-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      
+      const recordToSave: Partial<MedicalRecord> = {
+        ...formData,
       recordId,
-      patientName: formData.patientName || '',
-      patientId: formData.patientId || '',
-      age: formData.age || 0,
-      gender: formData.gender || '',
-      dateOfVisit: formData.dateOfVisit || new Date().toLocaleDateString(),
-      diagnosis: formData.diagnosis || '',
-      doctor: formData.doctor || 'Dr. Michael Chen',
       status: 'Completed'
     };
 
-    console.log('New record to save:', newRecord);
-    console.log('addMedicalRecord function exists:', typeof (window as any).addMedicalRecord);
+      // Log the data being sent for debugging
+      console.log('Sending medical record data:', JSON.stringify(recordToSave, null, 2));
 
-    // Save record using callback or global function
-    if (editingRecord) {
-      if (onUpdateRecord) {
-        onUpdateRecord(newRecord);
-        alert('Medical record updated successfully!');
-      } else if ((window as any).updateMedicalRecord) {
-        (window as any).updateMedicalRecord(newRecord);
+      if (fullRecord || editingRecord) {
+        // Update existing record
+        const recordIdToUpdate = fullRecord?._id || fullRecord?.id || (editingRecord as any)?._id || (editingRecord as any)?.id || '';
+        if (recordIdToUpdate) {
+          await medicalRecordService.update(recordIdToUpdate, recordToSave);
         alert('Medical record updated successfully!');
       } else {
-        alert('Error: Update function not available. Please refresh the page.');
-        console.error('updateMedicalRecord function not found');
-        return;
+          throw new Error('Cannot update: Record ID not found');
       }
     } else {
-      if (onAddRecord) {
-        onAddRecord(newRecord);
+        // Create new record
+        await medicalRecordService.create(recordToSave);
         alert('Medical record submitted successfully!');
-      } else if ((window as any).addMedicalRecord) {
-        (window as any).addMedicalRecord(newRecord);
-        alert('Medical record submitted successfully!');
-      } else {
-        alert('Error: Add function not available. Please refresh the page.');
-        console.error('addMedicalRecord function not found');
-        return;
       }
-    }
 
-    // Small delay to ensure state update happens before navigation
-    setTimeout(() => {
+      // Call parent callbacks if provided
+      if (onAddRecord && !fullRecord && !editingRecord) {
+        onAddRecord({} as MedicalRecordData); // Trigger reload
+      }
+      if (onUpdateRecord && (fullRecord || editingRecord)) {
+        onUpdateRecord({} as MedicalRecordData); // Trigger reload
+      }
+
+      // Navigate back
       if (onBack) {
         onBack();
       }
-    }, 100);
+    } catch (err: any) {
+      console.error('Failed to save medical record:', err);
+      console.error('Error object:', err);
+      // Extract error message from API response
+      const errorMessage = err.data?.error || err.message || 'Failed to save medical record. Please try again.';
+      const errorDetails = err.data?.details || (err.data?.missing ? JSON.stringify(err.data.missing, null, 2) : '');
+      alert(`${errorMessage}${errorDetails ? '\n\nMissing fields:\n' + errorDetails : ''}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleSaveDraft = () => {
-    const formData = collectFormData();
+  const handleSaveDraft = async () => {
+    const formData = collectAllFormData();
     
-    console.log('Collected form data (draft):', formData);
-    
-    if (!formData.patientName || !formData.patientId) {
+    if (!formData.patient?.name || !formData.patient?.id) {
       alert('Please fill in at least Patient Name and Patient ID');
       return;
     }
 
-    const recordId = editingRecord?.recordId || `MR-2024-${String(Date.now()).slice(-6)}`;
-    const newRecord: MedicalRecordData = {
+    setIsSubmitting(true);
+
+    try {
+      const recordId = fullRecord?.recordId || (editingRecord as any)?.recordId || `MR-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+      
+      const recordToSave: Partial<MedicalRecord> = {
+        ...formData,
       recordId,
-      patientName: formData.patientName || '',
-      patientId: formData.patientId || '',
-      age: formData.age || 0,
-      gender: formData.gender || '',
-      dateOfVisit: formData.dateOfVisit || new Date().toLocaleDateString(),
-      diagnosis: formData.diagnosis || '',
-      doctor: formData.doctor || 'Dr. Michael Chen',
       status: 'Daft'
     };
 
-    console.log('New record to save (draft):', newRecord);
-    console.log('addMedicalRecord function exists:', typeof (window as any).addMedicalRecord);
-
-    // Save record using callback or global function
-    if (editingRecord) {
-      if (onUpdateRecord) {
-        onUpdateRecord(newRecord);
-        alert('Medical record saved as draft!');
-      } else if ((window as any).updateMedicalRecord) {
-        (window as any).updateMedicalRecord(newRecord);
+      if (fullRecord || editingRecord) {
+        // Update existing record
+        const recordIdToUpdate = fullRecord?._id || fullRecord?.id || (editingRecord as any)?._id || (editingRecord as any)?.id || '';
+        if (recordIdToUpdate) {
+          await medicalRecordService.update(recordIdToUpdate, recordToSave);
         alert('Medical record saved as draft!');
       } else {
-        alert('Error: Update function not available. Please refresh the page.');
-        console.error('updateMedicalRecord function not found');
-        return;
+          throw new Error('Cannot update: Record ID not found');
       }
     } else {
-      if (onAddRecord) {
-        onAddRecord(newRecord);
+        // Create new record
+        await medicalRecordService.create(recordToSave);
         alert('Medical record saved as draft!');
-      } else if ((window as any).addMedicalRecord) {
-        (window as any).addMedicalRecord(newRecord);
-        alert('Medical record saved as draft!');
-      } else {
-        alert('Error: Add function not available. Please refresh the page.');
-        console.error('addMedicalRecord function not found');
-        return;
       }
-    }
 
-    // Small delay to ensure state update happens before navigation
-    setTimeout(() => {
+      // Call parent callbacks if provided
+      if (onAddRecord && !fullRecord && !editingRecord) {
+        onAddRecord({} as MedicalRecordData); // Trigger reload
+      }
+      if (onUpdateRecord && (fullRecord || editingRecord)) {
+        onUpdateRecord({} as MedicalRecordData); // Trigger reload
+      }
+
+      // Navigate back
       if (onBack) {
         onBack();
       }
-    }, 100);
+    } catch (err: any) {
+      console.error('Failed to save medical record:', err);
+      alert(err.message || 'Failed to save medical record. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="complete-medical-record-page" ref={formRef}>
-      {/* Page Header */}
-      <div className="page-header main-medical-form-width">
-        <div className="header-content">
+      {/* Header Section - Same as default medical records page */}
+      <div className="header">
+        <div className="header-left">
           {onBack && (
-            <button 
-              onClick={onBack}
-              style={{
-                marginBottom: '10px',
-                padding: '8px 16px',
-                background: '#f0f0f0',
-                border: '1px solid #ddd',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              ← Back to Medical Records
+            <button className="back-button" onClick={onBack} style={{ marginRight: '20px' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
             </button>
           )}
-          <h1 className="page-title">{editingRecord ? 'Edit Medical Record' : 'New Medical Record'}</h1>
-          <p className="page-subtitle">Complete patient medical record form</p>
-        </div>
-        <div className="header-actions">
-          <button className="btn-secondary" onClick={handleSaveDraft}>
-            Save as Draft
-          </button>
-          <button className="btn-primary" onClick={handleSubmit}>
-            Submit Record
-          </button>
+          <div>
+            <h1 className="title">Medical Record</h1>
+            <p className="subtitle">Manage Organization</p>
+          </div>
         </div>
       </div>
 
       {/* Forms Container */}
       <div className="forms-container">
         {/* 1. Patient Information */}
-        <div className="form-section main-medical-form-width">
-          <PatientForm />
+        <div className="form-section">
+          <PatientForm initialData={fullRecord || undefined} />
         </div>
 
         {/* 2. Medical History */}
-        <div className="form-section main-medical-form-width">
-          <MedicalHistory />
+        <div className="form-section">
+          <MedicalHistory initialData={fullRecord || undefined} />
         </div>
 
         {/* 3. Vital Signs */}
-        <div className="form-section main-medical-form-width">
-          <VitalSigns />
+        <div className="form-section">
+          <VitalSigns initialData={fullRecord || undefined} />
         </div>
 
         {/* 4. Physical Examination */}
-        <div className="form-section main-medical-form-width">
-          <PhysicalExamination />
+        <div className="form-section">
+          <PhysicalExamination initialData={fullRecord || undefined} />
         </div>
 
         {/* 5. Diagnosis & Tests */}
-        <div className="form-section main-medical-form-width">
+        <div className="form-section">
           <div className="diagnosis-tests-form">
             <div className="diagnosis-header">
               <div className="diagnosis-icon">
@@ -246,29 +421,29 @@ const CompleteMedicalRecord: React.FC<CompleteMedicalRecordProps> = ({
             <div className="diagnosis-content">
               <div className="diagnosis-field">
                 <label className="diagnosis-label">Diagnosis</label>
-                <textarea className="diagnosis-textarea input-short" rows={4} placeholder="Enter diagnosis"></textarea>
+                <textarea name="diagnosis" className="diagnosis-textarea input-short" rows={4} placeholder="Enter diagnosis"></textarea>
               </div>
               <div className="diagnosis-field">
                 <label className="diagnosis-label">Tests Ordered</label>
-                <textarea className="diagnosis-textarea input-short" rows={4} placeholder="Enter tests ordered"></textarea>
+                <textarea name="testsOrdered" className="diagnosis-textarea input-short" rows={4} placeholder="Enter tests ordered"></textarea>
               </div>
             </div>
           </div>
         </div>
 
         {/* 6. Treatment Plan */}
-        <div className="form-section main-medical-form-width">
-          <TreatmentPlan />
+        <div className="form-section">
+          <TreatmentPlan initialData={fullRecord || undefined} />
         </div>
       </div>
 
       {/* Bottom Action Buttons */}
-      <div className="bottom-actions main-medical-form-width">
-        <button className="btn-secondary-large" onClick={handleSaveDraft}>
-          Save as Draft
+      <div className="bottom-actions">
+        <button className="btn-secondary-large" onClick={handleSaveDraft} disabled={isSubmitting}>
+          {isSubmitting ? 'Saving...' : 'Save as Draft'}
         </button>
-        <button className="btn-primary-large" onClick={handleSubmit}>
-          Submit Medical Record
+        <button className="btn-primary-large" onClick={handleSubmit} disabled={isSubmitting}>
+          {isSubmitting ? 'Submitting...' : 'Submit Medical Record'}
         </button>
       </div>
     </div>

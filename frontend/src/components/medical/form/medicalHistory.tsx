@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../../../assets/style/medical/form/medicalHistoryForm.css';
 
 interface MedicalHistoryData {
@@ -12,7 +12,24 @@ interface MedicalHistoryData {
   currentMedications: string;
 }
 
-const MedicalHistory: React.FC = () => {
+interface MedicalHistoryProps {
+  initialData?: {
+    visit?: {
+      reasonOfVisit?: string;
+    };
+    medicalHistory?: {
+      allergiesStatus?: 'no-known' | 'has-allergies';
+      allergiesDetails?: string;
+      chronicDiseases?: string[];
+      chronicDiseasesDetails?: string;
+      pastSurgeries?: string;
+      familyHistories?: string;
+      currentMedications?: string;
+    };
+  };
+}
+
+const MedicalHistory: React.FC<MedicalHistoryProps> = ({ initialData }) => {
   const [formData, setFormData] = useState<MedicalHistoryData>({
     reasonOfVisit: '',
     allergiesStatus: '',
@@ -23,6 +40,22 @@ const MedicalHistory: React.FC = () => {
     familyHistories: '',
     currentMedications: ''
   });
+
+  // Populate form when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        reasonOfVisit: initialData.visit?.reasonOfVisit || '',
+        allergiesStatus: initialData.medicalHistory?.allergiesStatus || '',
+        allergiesDetails: initialData.medicalHistory?.allergiesDetails || '',
+        chronicDiseases: initialData.medicalHistory?.chronicDiseases || [],
+        chronicDiseasesDetails: initialData.medicalHistory?.chronicDiseasesDetails || '',
+        pastSurgeries: initialData.medicalHistory?.pastSurgeries || '',
+        familyHistories: initialData.medicalHistory?.familyHistories || '',
+        currentMedications: initialData.medicalHistory?.currentMedications || ''
+      });
+    }
+  }, [initialData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target;

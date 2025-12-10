@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../../../assets/style/medical/form/physicalForm.css';
 
 interface PhysicalExaminationData {
@@ -10,7 +10,20 @@ interface PhysicalExaminationData {
   additionalFindings: string;
 }
 
-const PhysicalExamination: React.FC = () => {
+interface PhysicalExaminationProps {
+  initialData?: {
+    physicalExamination?: {
+      generalAppearance?: string;
+      cardiovascular?: string;
+      respiratory?: string;
+      abdominal?: string;
+      neurological?: string;
+      additionalFindings?: string;
+    };
+  };
+}
+
+const PhysicalExamination: React.FC<PhysicalExaminationProps> = ({ initialData }) => {
   const [formData, setFormData] = useState<PhysicalExaminationData>({
     generalAppearance: '',
     cardiovascular: '',
@@ -19,6 +32,20 @@ const PhysicalExamination: React.FC = () => {
     neurological: '',
     additionalFindings: ''
   });
+
+  // Populate form when initialData changes
+  useEffect(() => {
+    if (initialData?.physicalExamination) {
+      setFormData({
+        generalAppearance: initialData.physicalExamination.generalAppearance || '',
+        cardiovascular: initialData.physicalExamination.cardiovascular || '',
+        respiratory: initialData.physicalExamination.respiratory || '',
+        abdominal: initialData.physicalExamination.abdominal || '',
+        neurological: initialData.physicalExamination.neurological || '',
+        additionalFindings: initialData.physicalExamination.additionalFindings || ''
+      });
+    }
+  }, [initialData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../../../assets/style/medical/form/patientForm.css';
 
 interface PatientFormData {
@@ -12,7 +12,24 @@ interface PatientFormData {
   dateOfVisit: string;
 }
 
-const PatientForm: React.FC = () => {
+interface PatientFormProps {
+  initialData?: {
+    patient?: {
+      name?: string;
+      gender?: 'Female' | 'Male' | 'Other';
+      dateOfBirth?: string | Date;
+      age?: number;
+      id?: string;
+      address?: string;
+      contactNumber?: string;
+    };
+    visit?: {
+      dateOfVisit?: string | Date;
+    };
+  };
+}
+
+const PatientForm: React.FC<PatientFormProps> = ({ initialData }) => {
   const [formData, setFormData] = useState<PatientFormData>({
     name: '',
     gender: '',
@@ -23,6 +40,29 @@ const PatientForm: React.FC = () => {
     contactNumber: '',
     dateOfVisit: ''
   });
+
+  // Populate form when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      const formatDate = (date: string | Date | undefined): string => {
+        if (!date) return '';
+        const d = date instanceof Date ? date : new Date(date);
+        if (isNaN(d.getTime())) return '';
+        return d.toISOString().split('T')[0];
+      };
+
+      setFormData({
+        name: initialData.patient?.name || '',
+        gender: initialData.patient?.gender || '',
+        dateOfBirth: formatDate(initialData.patient?.dateOfBirth),
+        age: initialData.patient?.age?.toString() || '',
+        id: initialData.patient?.id || '',
+        address: initialData.patient?.address || '',
+        contactNumber: initialData.patient?.contactNumber || '',
+        dateOfVisit: formatDate(initialData.visit?.dateOfVisit)
+      });
+    }
+  }, [initialData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

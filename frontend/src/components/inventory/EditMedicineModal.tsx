@@ -9,7 +9,7 @@ interface EditMedicineModalProps {
     name: string;
     group: string;
     description: string;
-    barcode?: File;
+    barcode_image?: File;
     photo?: File;
   }) => void;
   medicineId: string;
@@ -31,7 +31,7 @@ const EditMedicineModal: React.FC<EditMedicineModalProps> = ({
     name: currentName,
     group: currentGroup,
     description: currentDescription,
-    barcode: null as File | null,
+    barcode_image: null as File | null,
     photo: null as File | null
   });
 
@@ -43,7 +43,7 @@ const EditMedicineModal: React.FC<EditMedicineModalProps> = ({
         name: currentName,
         group: currentGroup,
         description: currentDescription,
-        barcode: null,
+        barcode_image: null,
         photo: null
       });
       setErrors({});
@@ -65,7 +65,7 @@ const EditMedicineModal: React.FC<EditMedicineModalProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'barcode' | 'photo') => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'barcode_image' | 'photo') => {
     const file = e.target.files?.[0];
     if (file) {
       setFormData(prev => ({
@@ -98,7 +98,7 @@ const EditMedicineModal: React.FC<EditMedicineModalProps> = ({
         name: formData.name.trim(),
         group: formData.group.trim(),
         description: formData.description.trim(),
-        barcode: formData.barcode || undefined,
+        barcode_image: formData.barcode_image || undefined,
         photo: formData.photo || undefined
       });
       onClose();
@@ -110,7 +110,7 @@ const EditMedicineModal: React.FC<EditMedicineModalProps> = ({
       name: currentName,
       group: currentGroup,
       description: currentDescription,
-      barcode: null,
+      barcode_image: null,
       photo: null
     });
     setErrors({});
@@ -190,27 +190,27 @@ const EditMedicineModal: React.FC<EditMedicineModalProps> = ({
             />
           </div>
 
-          {/* Bar Code */}
+          {/* Bar Code Image */}
           <div className="form-group">
-            <label htmlFor="barcode" className="form-label">
-              Bar Code:
+            <label htmlFor="barcode_image" className="form-label">
+              Bar Code Image:
             </label>
             <div className="file-upload-wrapper">
               <input
                 type="file"
-                id="barcode"
-                name="barcode"
+                id="barcode_image"
+                name="barcode_image"
                 className="file-input"
-                accept="image/*,.pdf"
-                onChange={(e) => handleFileChange(e, 'barcode')}
+                accept="image/*"
+                onChange={(e) => handleFileChange(e, 'barcode_image')}
               />
-              <label htmlFor="barcode" className="file-upload-label">
+              <label htmlFor="barcode_image" className="file-upload-label">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
-                {formData.barcode ? formData.barcode.name : 'Upload barcode'}
+                {formData.barcode_image ? formData.barcode_image.name : 'Upload barcode image'}
               </label>
             </div>
           </div>
@@ -263,6 +263,12 @@ const EditMedicineModal: React.FC<EditMedicineModalProps> = ({
 };
 
 export default EditMedicineModal;
+
+
+
+
+
+
 
 
 

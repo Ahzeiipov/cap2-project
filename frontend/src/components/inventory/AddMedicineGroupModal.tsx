@@ -4,7 +4,7 @@ import '../../assets/style/inventory/addMedicineGroupModal.css';
 interface AddMedicineGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (groupName: string) => void;
+  onSave: (groupName: string) => Promise<void> | void;
 }
 
 const AddMedicineGroupModal: React.FC<AddMedicineGroupModalProps> = ({
@@ -13,13 +13,22 @@ const AddMedicineGroupModal: React.FC<AddMedicineGroupModalProps> = ({
   onSave
 }) => {
   const [groupName, setGroupName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (groupName.trim()) {
-      onSave(groupName.trim());
-      setGroupName('');
-      onClose();
+    if (groupName.trim() && !isSaving) {
+      try {
+        setIsSaving(true);
+        await onSave(groupName.trim());
+        setGroupName('');
+        onClose();
+      } catch (error) {
+        // Error handling is done in parent component
+        // Don't close modal on error
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -66,9 +75,9 @@ const AddMedicineGroupModal: React.FC<AddMedicineGroupModalProps> = ({
             <button
               type="submit"
               className="btn-save"
-              disabled={!groupName.trim()}
+              disabled={!groupName.trim() || isSaving}
             >
-              Save
+              {isSaving ? 'Saving...' : 'Save'}
             </button>
           </div>
         </form>

@@ -1,21 +1,42 @@
-import React, { useEffect, useState } from 'react';
-import { Home, ClipboardList, Calendar, Settings, LogOut } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Home, ClipboardList, Calendar, Settings, LogOut, Package, Stethoscope } from 'lucide-react';
 
 const MenuSideBar = () => {
-  const location = useLocation();
-  const [activeItem, setActiveItem] = useState(location.pathname || '/dashboard');
+  const [activeItem, setActiveItem] = useState('/medical');
   const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
-    setActiveItem(location.pathname);
-  }, [location.pathname]);
+    // Listen for page changes
+    const handlePageChange = () => {
+      const currentPage = (window as any).currentPage || '/medical';
+      setActiveItem(currentPage);
+    };
+    
+    // Check current page on mount
+    handlePageChange();
+    
+    // Set up interval to check for page changes (simple polling approach)
+    const interval = setInterval(handlePageChange, 200);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleNavClick = (path: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    // Simply call navigation with the path - no conditions needed
+    if ((window as any).navigate) {
+      (window as any).navigate(path);
+    }
+    setActiveItem(path);
+  };
 
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: Home },
     { path: '/attendance', label: 'Attendance', icon: ClipboardList },
     { path: '/appointment', label: 'Appointment', icon: Calendar },
     { path: '/settings', label: 'Settings', icon: Settings },
+    { path: '/inventory', label: 'Inventory', icon: Package },
+    { path: '/medical', label: 'Medical', icon: Stethoscope },
   ];
 
   return (
@@ -41,18 +62,19 @@ const MenuSideBar = () => {
       <nav className="sidebar-nav">
         {menuItems.map((item) => {
           const IconComponent = item.icon;
-          const isActive = activeItem === item.path;
+          const isActive = activeItem === item.path || activeItem.startsWith(item.path);
           return (
-            <Link
+            <a
               key={item.path}
-              to={item.path}
+              href="#"
+              onClick={(e) => handleNavClick(item.path, e)}
               className={`sidebar-item ${isActive ? 'active' : ''}`}
               title={item.label}
             >
               <IconComponent className="sidebar-icon" size={22} />
               {isExpanded && <span className="sidebar-label">{item.label}</span>}
               {isActive && <div className="active-indicator" />}
-            </Link>
+            </a>
           );
         })}
       </nav>
@@ -90,6 +112,31 @@ const MenuSideBar = () => {
           padding: 0 16px 24px;
           border-bottom: 1px solid rgba(148, 163, 184, 0.1);
           margin-bottom: 24px;
+        }
+
+        .sidebar-logo {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          justify-content: center;
+        }
+
+        .logo-icon {
+          width: 48px;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 12px;
+          background-color: #334155;
+          flex-shrink: 0;
+          overflow: hidden;
+        }
+
+        .logo-icon img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
         }
 
         .logo-text {

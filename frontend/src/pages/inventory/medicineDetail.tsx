@@ -5,7 +5,7 @@ import BatchDetailModal from '../../components/inventory/BatchDetailModal';
 import AddBatchModal from '../../components/inventory/AddBatchModal';
 import EditBatchModal from '../../components/inventory/EditBatchModal';
 import InventoryBar from '../../components/layout/inventoryBar';
-import { getMedicineDetail, getBatchesByMedicine, getBatchDetail } from '../../data/inventoryData';
+import { inventoryService } from '../../services/api/inventoryService';
 import type { Batch } from '../../data/inventoryData';
 
 interface MedicineDetailProps {
@@ -19,52 +19,90 @@ const MedicineDetail: React.FC<MedicineDetailProps> = ({
   medicineName,
   onBack
   }) => {
-  const [searchTerm, setSearchTerm] = useState('');
   const [isBatchesOpen, setIsBatchesOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [isAddBatchModalOpen, setIsAddBatchModalOpen] = useState(false);
   const [isEditBatchModalOpen, setIsEditBatchModalOpen] = useState(false);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [batchDetails, setBatchDetails] = useState<{ [key: string]: any }>({});
-  const [medicineData, setMedicineData] = useState(getMedicineDetail(medicineId) || {
+  const [medicineData, setMedicineData] = useState({
     id: medicineId,
     name: medicineName,
     group: 'Unknown',
-    description: {
-      genericName: 'N/A',
-      strength: 'N/A',
-      dosageForm: 'N/A',
-      therapeuticClass: 'N/A'
-    },
+    description: {} as { genericName?: string },
     stock: { total: 0, batches: 0 }
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initialize batches and batch details from dummy data
+  // Load medicine and batches from API
   useEffect(() => {
-    const initialBatches = getBatchesByMedicine(medicineId);
-    setBatches(initialBatches);
-    
-    // Initialize batch details
-    const details: { [key: string]: any } = {};
-    initialBatches.forEach(batch => {
-      const detail = getBatchDetail(batch.id);
-      if (detail) {
-        details[batch.id] = detail;
+    loadMedicineData();
+  }, [medicineId]);
+
+  const loadMedicineData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Load medicine details
+      const medicine = await inventoryService.getMedicineById(medicineId);
+      if (medicine) {
+        // Helper function to check if a value is a placeholder
+        const isPlaceholder = (value: string | null | undefined): boolean => {
+          if (!value) return true;
+          const lowerValue = value.toLowerCase().trim();
+          const placeholders = ['n/a', 'na', 'none', 'null', 'undefined', 'yahoooo', '-', ''];
+          return placeholders.includes(lowerValue);
+        };
+
+        // Only include description if it has a real value
+        const description: any = {};
+        if (medicine.description && !isPlaceholder(medicine.description)) {
+          description.genericName = medicine.description;
+        }
+
+        setMedicineData({
+          id: medicine._id || medicine.id || medicineId,
+          name: medicine.name || medicineName,
+          group: medicine.group_medicine_id?.group_name || 'Unknown',
+          description,
+          stock: medicine.stock || { total: 0, batches: 0 }
+        });
       }
+      
+      // Load batches
+      const batchesData = await inventoryService.getBatchesByMedicine(medicineId);
+      setBatches(batchesData);
+      
+      // Convert batches to batch details format
+    const details: { [key: string]: any } = {};
+      batchesData.forEach((batch: any) => {
+        details[batch.id] = {
+          batchNo: batch.supplier ? `BATCH-${batch.id.slice(-6)}` : `BATCH-${batch.id.slice(-6)}`,
+          supplier: batch.supplier || 'Unknown',
+          quantity: batch.quantity || 0,
+          purchaseDate: batch.purchase_date || '',
+          expiryDate: batch.expiry_date || '',
+          purchasingPrice: batch.purchase_price || 0,
+          settingPrice: batch.setting_price || 0,
+          priceUnit: 'Unit'
+        };
     });
     setBatchDetails(details);
-    
-    const detail = getMedicineDetail(medicineId);
-    if (detail) {
-      setMedicineData(detail);
+    } catch (err: any) {
+      console.error('Failed to load medicine data:', err);
+      setError(err.message || 'Failed to load medicine data');
+    } finally {
+      setIsLoading(false);
     }
-  }, [medicineId]);
+  };
 
   const handleAddStock = () => {
     setIsAddBatchModalOpen(true);
   };
 
-  const handleSaveBatch = (batchData: {
+  const handleSaveBatch = async (batchData: {
     batchNo: string;
     supplier: string;
     quantity: number;
@@ -73,39 +111,26 @@ const MedicineDetail: React.FC<MedicineDetailProps> = ({
     purchasingPrice: number;
     settingPrice: number;
   }) => {
-    const batchId = `batch-${Date.now()}`;
-    const newBatch: Batch = {
-      id: batchId,
-      batchNo: batchData.batchNo,
-      expiryDate: batchData.expiryDate,
-      qty: batchData.quantity,
-      remaining: batchData.quantity,
-      purchaseDate: batchData.purchaseDate
-    };
-    
-    // Create batch detail
-    const newBatchDetail = {
-      batchNo: batchData.batchNo,
+    try {
+      setError(null);
+      const newBatch = await inventoryService.createBatch({
+        medicine_id: medicineId,
       supplier: batchData.supplier,
       quantity: batchData.quantity,
-      purchaseDate: batchData.purchaseDate,
-      expiryDate: batchData.expiryDate,
-      purchasingPrice: batchData.purchasingPrice,
-      settingPrice: batchData.settingPrice,
-      priceUnit: 'Tablet' // Default, can be made configurable
-    };
-    
-    setBatches(prev => [...prev, newBatch]);
-    setBatchDetails(prev => ({ ...prev, [batchId]: newBatchDetail }));
-    setMedicineData(prev => ({
-      ...prev,
-      stock: {
-        total: prev.stock.total + batchData.quantity,
-        batches: prev.stock.batches + 1
-      }
-    }));
-    console.log('New batch added:', newBatch);
-    setIsAddBatchModalOpen(false);
+        purchase_date: batchData.purchaseDate,
+        expiry_date: batchData.expiryDate,
+        purchase_price: batchData.purchasingPrice,
+        setting_price: batchData.settingPrice,
+      });
+      
+      // Reload medicine data to get updated stock
+      await loadMedicineData();
+      setIsAddBatchModalOpen(false);
+    } catch (err: any) {
+      console.error('Error creating batch:', err);
+      setError(err.message || 'Failed to create batch');
+      alert(err.message || 'Failed to create batch');
+    }
   };
 
   const handleCloseAddBatchModal = () => {
@@ -128,7 +153,7 @@ const MedicineDetail: React.FC<MedicineDetailProps> = ({
     setIsEditBatchModalOpen(true);
   };
 
-  const handleSaveEditBatch = (batchId: string, batchData: {
+  const handleSaveEditBatch = async (batchId: string, batchData: {
     batchNo: string;
     supplier: string;
     quantity: number;
@@ -137,88 +162,53 @@ const MedicineDetail: React.FC<MedicineDetailProps> = ({
     purchasingPrice: number;
     settingPrice: number;
   }) => {
-    const batch = batches.find(b => b.id === batchId);
-    if (batch) {
-      const oldQty = batch.qty;
-      const currentDetail = batchDetails[batchId] || getBatchDetail(batchId);
-      
-      setBatches(prev =>
-        prev.map(b =>
-          b.id === batchId
-            ? {
-                ...b,
-                batchNo: batchData.batchNo,
-                expiryDate: batchData.expiryDate,
-                qty: batchData.quantity,
-                remaining: batchData.quantity,
-                purchaseDate: batchData.purchaseDate
-              }
-            : b
-        )
-      );
-      
-      // Update batch detail
-      setBatchDetails(prev => ({
-        ...prev,
-        [batchId]: {
-          ...(currentDetail || {}),
-          batchNo: batchData.batchNo,
+    try {
+      setError(null);
+      await inventoryService.updateBatch(batchId, {
           supplier: batchData.supplier,
           quantity: batchData.quantity,
-          purchaseDate: batchData.purchaseDate,
-          expiryDate: batchData.expiryDate,
-          purchasingPrice: batchData.purchasingPrice,
-          settingPrice: batchData.settingPrice,
-          priceUnit: currentDetail?.priceUnit || 'Tablet'
-        }
-      }));
+        purchase_date: batchData.purchaseDate,
+        expiry_date: batchData.expiryDate,
+        purchase_price: batchData.purchasingPrice,
+        setting_price: batchData.settingPrice,
+      });
       
-      setMedicineData(prev => ({
-        ...prev,
-        stock: {
-          total: prev.stock.total - oldQty + batchData.quantity,
-          batches: prev.stock.batches
-        }
-      }));
-      console.log('Batch updated:', batchId, batchData);
-    }
+      // Reload medicine data to get updated stock
+      await loadMedicineData();
     setIsEditBatchModalOpen(false);
     handleCloseBatchDetail();
+    } catch (err: any) {
+      console.error('Error updating batch:', err);
+      setError(err.message || 'Failed to update batch');
+      alert(err.message || 'Failed to update batch');
+    }
   };
 
   const handleCloseEditBatchModal = () => {
     setIsEditBatchModalOpen(false);
   };
 
-  const handleDeleteBatch = () => {
+  const handleDeleteBatch = async () => {
     if (selectedBatchId) {
       if (window.confirm('Are you sure you want to delete this batch? This action cannot be undone.')) {
-        const batch = batches.find(b => b.id === selectedBatchId);
-        if (batch) {
-          setBatches(prev => prev.filter(b => b.id !== selectedBatchId));
-          setBatchDetails(prev => {
-            const newState = { ...prev };
-            delete newState[selectedBatchId];
-            return newState;
-          });
-          setMedicineData(prev => ({
-            ...prev,
-            stock: {
-              total: Math.max(0, prev.stock.total - batch.qty),
-              batches: Math.max(0, prev.stock.batches - 1)
-            }
-          }));
-          console.log('Batch deleted:', selectedBatchId);
+        try {
+          setError(null);
+          await inventoryService.deleteBatch(selectedBatchId);
+          
+          // Reload medicine data to get updated stock
+          await loadMedicineData();
+          handleCloseBatchDetail();
+        } catch (err: any) {
+          console.error('Error deleting batch:', err);
+          setError(err.message || 'Failed to delete batch');
+          alert(err.message || 'Failed to delete batch');
         }
-        handleCloseBatchDetail();
       }
     }
   };
 
-  // Get batch detail - check state first, then fallback to dummy data
-  const selectedBatchDetail = selectedBatchId ? (
-    batchDetails[selectedBatchId] || getBatchDetail(selectedBatchId)
-  ) : null;
+  // Get batch detail from state
+  const selectedBatchDetail = selectedBatchId ? batchDetails[selectedBatchId] : null;
 
   return (
     <div className="medicine-detail-container">
@@ -226,8 +216,7 @@ const MedicineDetail: React.FC<MedicineDetailProps> = ({
       <InventoryBar
         showBackButton={true}
         onBack={onBack}
-        searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
+        showSearchBar={false}
       />
 
       {/* Medicine Name and Add Stock Button */}
@@ -239,6 +228,24 @@ const MedicineDetail: React.FC<MedicineDetailProps> = ({
         </button>
       </div>
 
+      {error && (
+        <div style={{ 
+          padding: '10px', 
+          backgroundColor: '#fee', 
+          color: '#c33', 
+          borderRadius: '4px',
+          marginBottom: '20px'
+        }}>
+          Error: {error}
+        </div>
+      )}
+
+      {isLoading && (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          Loading medicine data...
+        </div>
+      )}
+
       {/* Medicine Detail Card */}
       <div className="detail-card">
         {/* Group */}
@@ -247,28 +254,20 @@ const MedicineDetail: React.FC<MedicineDetailProps> = ({
           <span className="detail-value group-value">{medicineData.group}</span>
         </div>
 
-        {/* Description */}
+        {/* Description - Only show if there's actual content */}
+        {Object.keys(medicineData.description).length > 0 && (
         <div className="detail-section description-section">
           <div className="section-label">Description:</div>
           <div className="description-content">
+              {medicineData.description.genericName && (
             <div className="description-item">
-              <span className="desc-label">Generic Name:</span>
+                  <span className="desc-label">Description:</span>
               <span className="desc-value">{medicineData.description.genericName}</span>
             </div>
-            <div className="description-item">
-              <span className="desc-label">Strength:</span>
-              <span className="desc-value">{medicineData.description.strength}</span>
-            </div>
-            <div className="description-item">
-              <span className="desc-label">Dosage Form:</span>
-              <span className="desc-value">{medicineData.description.dosageForm}</span>
-            </div>
-            <div className="description-item">
-              <span className="desc-label">Therapeutic Class:</span>
-              <span className="desc-value">{medicineData.description.therapeuticClass}</span>
+              )}
             </div>
           </div>
-        </div>
+        )}
 
         {/* Stock */}
         <div className="detail-section stock-section">

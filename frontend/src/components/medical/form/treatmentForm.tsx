@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../../../assets/style/medical/form/treatmentForm.css';
 
 interface TreatmentPlanData {
@@ -7,12 +7,33 @@ interface TreatmentPlanData {
   instruction: string;
 }
 
-const TreatmentPlan: React.FC = () => {
+interface TreatmentPlanProps {
+  initialData?: {
+    treatmentPlan?: {
+      medicationsPrescribed?: string;
+      proceduresPerformed?: string;
+      instruction?: string;
+    };
+  };
+}
+
+const TreatmentPlan: React.FC<TreatmentPlanProps> = ({ initialData }) => {
   const [formData, setFormData] = useState<TreatmentPlanData>({
     medicationsPrescribed: '',
     proceduresPerformed: '',
     instruction: ''
   });
+
+  // Populate form when initialData changes
+  useEffect(() => {
+    if (initialData?.treatmentPlan) {
+      setFormData({
+        medicationsPrescribed: initialData.treatmentPlan.medicationsPrescribed || '',
+        proceduresPerformed: initialData.treatmentPlan.proceduresPerformed || '',
+        instruction: initialData.treatmentPlan.instruction || ''
+      });
+    }
+  }, [initialData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target;

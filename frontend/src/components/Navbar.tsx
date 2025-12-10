@@ -1,46 +1,37 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { Bell, LayoutDashboard, ClipboardList, Calendar, User, HomeIcon, CameraIcon } from 'lucide-react'
+import { Bell, User, HomeIcon, CameraIcon } from 'lucide-react'
 import './Navbar.css'
 
 const Navbar = () => {
-  const location = useLocation()
-  const current = location.pathname
-
   const tabs = [
     { path: '/dashboard', label: 'Home', icon: HomeIcon},
     { path: '/', label: 'Scan QR', icon: CameraIcon },
     { path: '/', label: 'Profile', icon: User },
-    // { path: '/attendance', label: 'Attendance', icon: ClipboardList },
-    // { path: '/appointment', label: 'Appointment', icon: Calendar },
   ]
+
+  const handleNavClick = (path: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    // Handle navigation if needed
+  }
 
   return (
     <header className="topbar">
       <div className="topbar-content">
-        {/* Left - Logo */}
-        {/* <div className="topbar-left">
-          <Link to="/dashboard" className="brand-link">
-            <div className="brand-icon">📋</div>
-            <span className="brand-text">CareLink</span>
-          </Link>
-        </div> */}
-
         {/* Center - Navigation */}
         <nav className="topbar-center">
           {tabs.map((tab) => {
             const Icon = tab.icon
-            const isActive = current === tab.path
             return (
-              <Link
+              <a
                 key={tab.path}
-                to={tab.path}
-                className={`nav-tab ${isActive ? 'active' : ''}`}
+                href="#"
+                onClick={(e) => handleNavClick(tab.path, e)}
+                className="nav-tab"
                 title={tab.label}
               >
                 <Icon className="nav-icon" />
                 <span className="nav-label">{tab.label}</span>
-              </Link>
+              </a>
             )
           })}
         </nav>
@@ -52,9 +43,9 @@ const Navbar = () => {
             <span className="notification-badge"></span>
           </button>
 
-          <Link to="/profile" className="user-profile">
+          <a href="#profile" className="user-profile">
             <div className="avatar">JD</div>
-          </Link>
+          </a>
         </div>
       </div>
     </header>

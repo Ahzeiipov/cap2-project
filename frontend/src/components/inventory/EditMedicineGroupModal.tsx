@@ -4,7 +4,7 @@ import '../../assets/style/inventory/editMedicineGroupModal.css';
 interface EditMedicineGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (groupId: string, groupName: string) => void;
+  onSave: (groupId: string, groupName: string) => Promise<void> | void;
   groupId: string;
   currentName: string;
 }
@@ -18,15 +18,17 @@ const EditMedicineGroupModal: React.FC<EditMedicineGroupModalProps> = ({
 }) => {
   const [groupName, setGroupName] = useState(currentName);
   const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setGroupName(currentName);
       setError('');
+      setIsSaving(false);
     }
   }, [isOpen, currentName]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!groupName.trim()) {
@@ -34,8 +36,17 @@ const EditMedicineGroupModal: React.FC<EditMedicineGroupModalProps> = ({
       return;
     }
 
-    onSave(groupId, groupName.trim());
-    onClose();
+    if (isSaving) return;
+
+    try {
+      setIsSaving(true);
+      await onSave(groupId, groupName.trim());
+      onClose();
+    } catch (err: any) {
+      setError(err.message || 'Failed to update group');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -95,8 +106,9 @@ const EditMedicineGroupModal: React.FC<EditMedicineGroupModalProps> = ({
             <button
               type="submit"
               className="btn-save"
+              disabled={isSaving}
             >
-              Save
+              {isSaving ? 'Saving...' : 'Save'}
             </button>
           </div>
         </form>
@@ -106,6 +118,12 @@ const EditMedicineGroupModal: React.FC<EditMedicineGroupModalProps> = ({
 };
 
 export default EditMedicineGroupModal;
+
+
+
+
+
+
 
 
 

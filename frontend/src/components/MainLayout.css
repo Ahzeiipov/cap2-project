@@ -30,6 +30,7 @@ html, body, #root {
   overflow-x: hidden;
   margin-top: 64px;
   padding: 24px;
+  background: #f9fafb;
 }
 
 /* Scrollbar styling */

@@ -28,12 +28,14 @@
   background: white;
   border-radius: 16px;
   width: 90%;
-  max-width: 420px;
+  max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
   z-index: 1000;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: slideUp 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes slideUp {
@@ -121,54 +123,61 @@
 /* Modal Content */
 .modal-content {
   padding: 24px 28px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 /* Section */
 .details-section {
-  margin-bottom: 28px;
-}
-
-.details-section:last-child {
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
   margin-bottom: 0;
 }
 
 .section-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .section-icon {
-  width: 20px;
-  height: 20px;
-  color: #666;
+  width: 24px;
+  height: 24px;
+  color: #6366f1;
   flex-shrink: 0;
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
-  color: #000;
+  color: #111827;
   margin: 0;
+  letter-spacing: -0.3px;
 }
 
 /* Info Grid */
 .info-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.info-grid:last-child {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px 24px;
   margin-bottom: 0;
 }
 
 .info-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .info-item.full-width {
@@ -176,20 +185,27 @@
 }
 
 .info-label {
-  font-size: 12px;
-  color: #666;
-  font-weight: 500;
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .info-value {
-  font-size: 14px;
-  color: #000;
-  font-weight: 400;
+  font-size: 15px;
+  color: #111827;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 /* Detail Block */
 .detail-block {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .detail-block:last-child {
@@ -198,17 +214,21 @@
 
 .detail-label {
   display: block;
-  font-size: 13px;
-  color: #000;
+  font-size: 12px;
+  color: #6b7280;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .detail-text {
-  font-size: 13px;
-  color: #666;
-  line-height: 1.5;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.7;
   margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 /* Status Badge Inline */
@@ -234,7 +254,7 @@
 }
 
 /* Responsive Design */
-@media (max-width: 576px) {
+@media (max-width: 768px) {
   .medical-details-modal {
     width: 95%;
     max-width: none;
@@ -246,14 +266,15 @@
 
   .modal-content {
     padding: 20px;
+    gap: 20px;
   }
 
   .modal-title {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   .modal-subtitle {
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .info-grid {
@@ -263,5 +284,9 @@
 
   .info-item.full-width {
     grid-column: span 1;
+  }
+
+  .details-section {
+    padding: 16px;
   }
 }
